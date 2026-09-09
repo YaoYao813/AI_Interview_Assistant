@@ -1,0 +1,28 @@
+# AI Interview Assistant - Backend Dependencies
+
+# Web Framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# AI / RAG
+langchain==0.3.13
+langchain-community==0.3.13
+langchain-openai==0.2.14
+chromadb==0.5.23
+openai==1.58.1
+tiktoken==0.8.0
+
+# Document Processing
+pypdf==5.1.0
+python-docx==1.1.2
+unstructured>=0.16.0
+
+# Redis
+redis==5.2.1
+
+# Configuration
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+
+# Utils
+httpx==0.28.1
