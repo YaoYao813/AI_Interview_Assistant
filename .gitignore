@@ -1,0 +1,25 @@
+# 环境变量与密钥（严禁提交）
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Node
+node_modules/
+dist/
+
+# 本地数据（Chroma 向量库、上传文件）
+backend/chroma/
+backend/data/
+
+# IDE
+.idea/
+.vscode/
+
+# Claude Code 本地配置
+.claude/
