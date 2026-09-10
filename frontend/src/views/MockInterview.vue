@@ -143,33 +143,24 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { startInterview, evaluateAnswer } from '@/api/interview'
+import { useInterviewStore } from '@/stores/interview'
 
-// 表单
+const store = useInterviewStore()
+const {
+  sessionId, total, currentIndex, currentQuestion, answer,
+  evaluating, evaluation, rounds, finished, averageScore,
+} = storeToRefs(store)
+
+// 表单（开始前的输入，不持久化）
 const role = ref('')
 const topicsText = ref('')
 const difficulty = ref('medium')
 const resumeFile = ref(null)
 const starting = ref(false)
-
-// 面试进度
-const sessionId = ref(null)
-const total = ref(0)
-const currentIndex = ref(0)
-const currentQuestion = ref('')
-const answer = ref('')
-const evaluating = ref(false)
-const evaluation = ref(null)
-const rounds = ref([])
-const finished = ref(false)
-
-const averageScore = computed(() => {
-  if (!rounds.value.length) return 0
-  const sum = rounds.value.reduce((s, r) => s + Number(r.score || 0), 0)
-  return sum / rounds.value.length
-})
 
 function handleResumeSelect(uploadFile) {
   resumeFile.value = uploadFile.raw || null
@@ -197,11 +188,7 @@ async function handleStart() {
   starting.value = true
   try {
     const res = await startInterview(formData)
-    const data = res.data || {}
-    sessionId.value = data.session_id
-    total.value = data.total
-    currentIndex.value = data.current_index
-    currentQuestion.value = data.current_question
+    store.startSession(res.data || {})
   } catch (e) {
     ElMessage.error(e?.response?.data?.message || '开始面试失败')
   } finally {
@@ -215,19 +202,7 @@ async function handleSubmit() {
   evaluating.value = true
   try {
     const res = await evaluateAnswer(sessionId.value, a)
-    const data = res.data || {}
-    evaluation.value = data
-    rounds.value.push({
-      question: currentQuestion.value,
-      answer: a,
-      score: data.score,
-      feedback: data.feedback,
-      model_answer: data.model_answer,
-    })
-    currentIndex.value = data.current_index
-    if (data.is_finished) {
-      finished.value = true
-    }
+    store.recordEvaluation(res.data || {}, a)
   } catch (e) {
     ElMessage.error(e?.response?.data?.message || '评价失败')
   } finally {
@@ -236,20 +211,11 @@ async function handleSubmit() {
 }
 
 function handleNext() {
-  currentQuestion.value = evaluation.value?.next_question || ''
-  answer.value = ''
-  evaluation.value = null
+  store.goNext()
 }
 
 function reset() {
-  sessionId.value = null
-  total.value = 0
-  currentIndex.value = 0
-  currentQuestion.value = ''
-  answer.value = ''
-  evaluation.value = null
-  rounds.value = []
-  finished.value = false
+  store.reset()
   role.value = ''
   topicsText.value = ''
   difficulty.value = 'medium'
