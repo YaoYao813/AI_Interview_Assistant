@@ -1,21 +1,40 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 
+from app.api.deps import get_interview_svc
 from app.models.common import ApiResponse
-from app.models.interview import InterviewRequest
+from app.models.interview import EvaluateRequest, InterviewRequest
 from app.services.interview_service import InterviewService
 
 router = APIRouter(prefix="/interview", tags=["模拟面试"])
 
 
 @router.post("/start", response_model=ApiResponse)
-async def start_interview(req: InterviewRequest):
-    service = InterviewService()
-    result = await service.start_session(req)
+async def start_interview(
+    role: str = Form(...),
+    topics: str = Form(""),
+    difficulty: str = Form("medium"),
+    file: UploadFile | None = File(None),
+    interview_svc: InterviewService = Depends(get_interview_svc),
+):
+    resume_text = ""
+    if file is not None and file.filename:
+        content = await file.read()
+        resume_text = await interview_svc.parse_resume(content, file.filename)
+
+    req = InterviewRequest(
+        role=role,
+        topics=[t.strip() for t in topics.split(",") if t.strip()],
+        difficulty=difficulty,
+        resume_text=resume_text,
+    )
+    result = await interview_svc.start_session(req)
     return ApiResponse(data=result)
 
 
 @router.post("/evaluate", response_model=ApiResponse)
-async def evaluate_answer(session_id: str, question: str, answer: str):
-    service = InterviewService()
-    result = await service.evaluate(session_id, question, answer)
+async def evaluate_answer(
+    req: EvaluateRequest,
+    interview_svc: InterviewService = Depends(get_interview_svc),
+):
+    result = await interview_svc.evaluate(req.session_id, req.answer)
     return ApiResponse(data=result)

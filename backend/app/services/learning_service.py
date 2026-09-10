@@ -55,3 +55,21 @@ class LearningService:
 返回 JSON：{"matched_skills": [...], "missing_skills": [...], "suggestion": "总体建议"}"""
         user_message = f"目标岗位：{target_role}\n简历内容：\n{resume_text}"
         return await self.llm.chat_json(system_prompt, user_message)
+
+
+# ===== 全局单例 =====
+_learning_service_instance: LearningService | None = None
+
+
+def get_learning_service() -> LearningService:
+    """获取 LearningService 单例"""
+    global _learning_service_instance
+    if _learning_service_instance is None:
+        _learning_service_instance = LearningService()
+    return _learning_service_instance
+
+
+def reset_learning_service() -> None:
+    """重置单例（测试用）"""
+    global _learning_service_instance
+    _learning_service_instance = None
