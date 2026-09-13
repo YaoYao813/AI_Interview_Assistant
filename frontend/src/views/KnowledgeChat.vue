@@ -1,50 +1,34 @@
 <template>
   <div class="knowledge-chat">
-    <!-- 左侧对话列表 -->
-    <aside class="chat-sidebar">
-      <div class="sidebar-header">
-        <el-button type="primary" @click="chatStore.createConversation()" style="width:100%">
-          ＋ 新对话
-        </el-button>
-      </div>
-      <div class="conversation-list">
-        <div
-          v-for="conv in chatStore.sortedConversations"
-          :key="conv.id"
-          class="conv-item"
-          :class="{ active: conv.id === chatStore.activeId }"
-          @click="chatStore.switchConversation(conv.id)"
-        >
-          <span class="conv-title">{{ conv.title }}</span>
-          <span class="conv-date">{{ formatDate(conv.updatedAt) }}</span>
-          <el-popconfirm
-            title="删除此对话？"
-            @confirm="chatStore.deleteConversation(conv.id)"
-            @click.stop
-          >
-            <template #reference>
-              <span class="conv-delete" @click.stop>🗑</span>
-            </template>
-          </el-popconfirm>
-        </div>
-        <EmptyState
-          v-if="chatStore.conversations.length === 0"
-          icon="💬"
-          title="暂无对话"
-          description="点击上方按钮开始新对话"
-        />
-      </div>
-      <div class="sidebar-footer">
-        <span>📚 {{ stats.document_count }} 文档 | 🧩 {{ stats.chunk_count }} 块</span>
-      </div>
-    </aside>
+    <!-- 二级侧栏：历史对话 -->
+    <ConversationSidebar
+      :conversations="chatStore.sortedConversations"
+      :active-id="chatStore.activeId"
+      :title-of="titleOf"
+      :summary-of="summaryOf"
+      workspace-icon="chat"
+      workspace-name="知识问答"
+      empty-icon="chat"
+      empty-title="暂无对话"
+      empty-desc="点击上方按钮开始新对话"
+      @create="chatStore.createConversation()"
+      @switch="chatStore.switchConversation"
+      @delete="chatStore.deleteConversation"
+    >
+      <template #footer>
+        <span class="stat-line">
+          <LineIcon name="book" :size="13" /> {{ stats.document_count }} 文档 |
+          <LineIcon name="grid" :size="13" /> {{ stats.chunk_count }} 块
+        </span>
+      </template>
+    </ConversationSidebar>
 
     <!-- 右侧聊天区 -->
     <div class="chat-main">
       <!-- 空状态 -->
       <EmptyState
         v-if="!chatStore.activeConversation"
-        icon="💬"
+        icon="chat"
         title="选择或创建一个对话"
         description="基于知识库的 AI 智能问答"
       />
@@ -54,7 +38,7 @@
         <div class="chat-messages" ref="msgContainer">
           <EmptyState
             v-if="chatStore.activeConversation.messages.length === 0"
-            icon="📭"
+            icon="inbox"
             title="开始提问"
             description="输入技术问题，AI 将基于你的知识库回答"
           />
@@ -82,6 +66,8 @@ import { useChatStore } from '@/stores/chat'
 import ChatMessage from '@/components/chat/ChatMessage.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import ConversationSidebar from '@/components/common/ConversationSidebar.vue'
+import LineIcon from '@/components/common/LineIcon.vue'
 
 const chatStore = useChatStore()
 const loadingConvIds = ref(new Set())
@@ -189,50 +175,25 @@ function scrollToBottom() {
   }
 }
 
-function formatDate(ts) {
-  const d = new Date(ts)
-  const now = new Date()
-  if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  }
-  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+function titleOf(conv) {
+  return conv.title || '新对话'
+}
+
+function summaryOf(conv) {
+  const msgs = conv.messages || []
+  const last = msgs[msgs.length - 1]
+  if (!last) return ''
+  const c = last.content || ''
+  return c.length > 20 ? c.slice(0, 20) + '...' : c
 }
 </script>
 
 <style scoped>
 .knowledge-chat { height: 100%; display: flex; }
 
-/* 侧栏 */
-.chat-sidebar {
-  width: 260px; background: var(--bg-white); border-right: 1px solid var(--border-color);
-  display: flex; flex-direction: column; flex-shrink: 0;
-}
-.sidebar-header { padding: 16px; border-bottom: 1px solid var(--border-color); }
-.conversation-list { flex: 1; overflow-y: auto; }
-.conv-item {
-  display: grid; grid-template-columns: 1fr 24px; grid-template-rows: auto auto;
-  padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f0f0f0;
-  transition: background 0.15s;
-}
-.conv-item:hover { background: var(--bg-page); }
-.conv-item.active { background: var(--primary-light); border-left: 3px solid var(--primary); }
-.conv-title {
-  font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; grid-column: 1; grid-row: 1;
-}
-.conv-date { font-size: 12px; color: var(--text-secondary); grid-column: 1; grid-row: 2; margin-top: 2px; }
-.conv-delete {
-  font-size: 12px; cursor: pointer; opacity: 0; transition: opacity 0.15s;
-  grid-column: 2; grid-row: 1 / 3; align-self: center; text-align: center;
-}
-.conv-item:hover .conv-delete { opacity: 0.6; }
-.conv-item:hover .conv-delete:hover { opacity: 1; }
-.sidebar-footer {
-  padding: 10px 16px; font-size: 12px; color: var(--text-secondary);
-  border-top: 1px solid var(--border-color);
-}
-
 /* 聊天区 */
 .chat-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .chat-messages { flex: 1; overflow-y: auto; padding: 0 24px; }
+
+.stat-line { display: inline-flex; align-items: center; gap: 4px; }
 </style>
