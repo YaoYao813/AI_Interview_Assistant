@@ -1,75 +1,88 @@
 <template>
-  <aside class="sidebar" :class="{ collapsed }">
-    <div class="sidebar-logo" @click="$router.push('/')">
-      <span class="logo-icon">🎯</span>
-      <span v-show="!collapsed" class="logo-text">AI Interview</span>
+  <aside class="nav-rail">
+    <div class="rail-logo" title="AI Interview" @click="$router.push('/')">
+      <LineIcon name="target" :size="22" />
     </div>
 
-    <div class="sidebar-nav">
-      <router-link v-for="item in visibleMenu" :key="item.path" :to="item.path" class="nav-item">
-        <span class="nav-icon">{{ item.icon }}</span>
-        <span v-show="!collapsed" class="nav-label">{{ item.label }}</span>
+    <nav class="rail-nav">
+      <router-link
+        v-for="item in visibleMenu"
+        :key="item.path"
+        :to="item.path"
+        class="rail-item"
+        :class="{ active: isActive(item.path) }"
+        :title="item.label"
+      >
+        <LineIcon class="rail-icon" :name="item.icon" :size="19" />
       </router-link>
-    </div>
+    </nav>
 
-    <div class="sidebar-footer">
-      <div class="collapse-btn" @click="appStore.toggleSidebar()">
-        {{ collapsed ? '▶' : '◀' }}
-      </div>
+    <div class="rail-footer">
+      <span v-if="appStore.isAdmin" class="rail-badge" title="管理员">管理员</span>
+      <div class="rail-avatar" title="Yao">Y</div>
     </div>
   </aside>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
+import LineIcon from '@/components/common/LineIcon.vue'
 
+const route = useRoute()
 const appStore = useAppStore()
-const collapsed = computed(() => appStore.sidebarCollapsed)
 
 const allMenu = [
-  { path: '/', icon: '📊', label: '仪表盘', roles: ['user', 'admin'] },
-  { path: '/knowledge', icon: '💬', label: '知识问答', roles: ['user', 'admin'] },
-  { path: '/resume', icon: '📄', label: '简历分析', roles: ['user', 'admin'] },
-  { path: '/interview', icon: '🎤', label: '模拟面试', roles: ['user', 'admin'] },
-  { path: '/learning', icon: '🗺️', label: '学习路线', roles: ['user', 'admin'] },
-  { path: '/admin/knowledge', icon: '⚙️', label: '知识库管理', roles: ['admin'] },
+  { path: '/', icon: 'dashboard', label: '仪表盘', roles: ['user', 'admin'] },
+  { path: '/knowledge', icon: 'chat', label: '知识问答', roles: ['user', 'admin'] },
+  { path: '/resume', icon: 'file', label: '简历分析', roles: ['user', 'admin'] },
+  { path: '/interview', icon: 'mic', label: '模拟面试', roles: ['user', 'admin'] },
+  { path: '/learning', icon: 'map', label: '学习路线', roles: ['user', 'admin'] },
+  { path: '/admin/knowledge', icon: 'settings', label: '知识库管理', roles: ['admin'] },
 ]
 
 const visibleMenu = computed(() =>
   allMenu.filter(item => item.roles.includes(appStore.userRole))
 )
+
+function isActive(path) {
+  return path === '/' ? route.path === '/' : route.path.startsWith(path)
+}
 </script>
 
 <style scoped>
-.sidebar {
-  width: 220px; height: 100%; background: var(--sidebar-bg);
-  display: flex; flex-direction: column; transition: width 0.2s;
-  overflow: hidden;
+.nav-rail {
+  width: 60px; height: 100%; background: var(--bg-nav-level1);
+  border-right: 1px solid var(--border-line);
+  display: flex; flex-direction: column; align-items: center;
+  flex-shrink: 0; padding: 12px 0;
 }
-.sidebar.collapsed { width: 64px; }
-.sidebar-logo {
-  display: flex; align-items: center; gap: 8px; padding: 16px 20px;
-  cursor: pointer; user-select: none;
+.rail-logo {
+  font-size: 24px; cursor: pointer; user-select: none; margin-bottom: 16px;
+  line-height: 1;
 }
-.sidebar.collapsed .sidebar-logo { padding: 16px; justify-content: center; }
-.logo-icon { font-size: 24px; }
-.logo-text { font-size: 16px; font-weight: 600; color: #fff; white-space: nowrap; }
-.sidebar-nav { flex: 1; padding: 8px 0; }
-.nav-item {
-  display: flex; align-items: center; gap: 12px; padding: 12px 20px;
-  color: #a0a4b8; text-decoration: none; font-size: 14px;
-  transition: all 0.15s; border-left: 3px solid transparent;
+.rail-nav {
+  flex: 1; width: 100%; display: flex; flex-direction: column;
+  align-items: center; gap: 6px;
 }
-.sidebar.collapsed .nav-item { padding: 12px; justify-content: center; }
-.nav-item:hover { background: var(--sidebar-hover); color: #d0d4e8; }
-.nav-item.router-link-active { background: var(--sidebar-active); color: #fff; border-left-color: var(--primary); }
-.nav-icon { font-size: 18px; flex-shrink: 0; }
-.nav-label { white-space: nowrap; }
-.sidebar-footer { padding: 12px; border-top: 1px solid rgba(255,255,255,0.06); }
-.collapse-btn {
-  text-align: center; cursor: pointer; color: #6b6f85; font-size: 12px;
-  padding: 6px; border-radius: 4px; transition: color 0.2s;
+.rail-item {
+  width: 40px; height: 40px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  text-decoration: none; color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s;
 }
-.collapse-btn:hover { color: #a0a4b8; }
+.rail-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.rail-item.active { background: var(--bg-hover); color: var(--text-primary); }
+.rail-icon { font-size: 18px; line-height: 1; }
+.rail-footer {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding-top: 8px;
+}
+.rail-badge { font-size: 10px; color: var(--text-secondary); letter-spacing: 0.5px; }
+.rail-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--bg-hover);
+  color: var(--text-primary); font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; user-select: none;
+}
 </style>

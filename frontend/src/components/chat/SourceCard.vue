@@ -1,7 +1,7 @@
 <template>
   <div class="source-card">
     <div class="source-header" @click="expanded = !expanded">
-      <span class="source-label">📎 引用来源 ({{ sources.length }})</span>
+      <span class="source-label"><LineIcon name="paperclip" :size="13" /> 引用来源 ({{ sources.length }})</span>
       <span class="source-toggle">{{ expanded ? '收起' : '展开' }}</span>
     </div>
     <div v-show="expanded" class="source-list">
@@ -16,6 +16,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import LineIcon from '@/components/common/LineIcon.vue'
 
 defineProps({
   sources: { type: Array, default: () => [] },
@@ -27,14 +28,14 @@ const expanded = ref(true)
 <style scoped>
 .source-card {
   margin-top: 12px; border: 1px solid var(--border-color); border-radius: var(--radius);
-  background: #fafbfc; overflow: hidden;
+  background: var(--bg-input); overflow: hidden;
 }
 .source-header {
   display: flex; justify-content: space-between; align-items: center;
   padding: 8px 12px; cursor: pointer; font-size: 13px; color: var(--text-secondary);
   user-select: none;
 }
-.source-header:hover { background: #f0f2f5; }
+.source-header:hover { background: var(--bg-hover); }
 .source-toggle { font-size: 12px; color: var(--primary); }
 .source-list { padding: 0 12px 8px; }
 .source-item {
