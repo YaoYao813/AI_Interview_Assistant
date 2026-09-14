@@ -153,6 +153,15 @@
         <div class="detail-toolbar">
           <LineIcon name="search" :size="14" />
           <input v-model="docKeyword" class="doc-search" type="text" placeholder="按文件名搜索" />
+          <el-select
+            v-model="formatFilter"
+            placeholder="全部格式"
+            clearable
+            size="small"
+            style="width: 120px"
+          >
+            <el-option v-for="f in formatOptions" :key="f" :label="f" :value="f" />
+          </el-select>
         </div>
 
         <el-table
@@ -212,6 +221,7 @@ const progress = ref({ done: 0, total: 0 })
 const tableLoading = ref(false)
 const detailOpen = ref(false)
 const docKeyword = ref('')
+const formatFilter = ref('')
 const dragActive = ref(false)
 const sizes = ref(loadSizes())
 
@@ -219,9 +229,14 @@ const pendingCount = computed(() => queue.value.filter(i => i.status !== 'succes
 
 const filteredDocuments = computed(() => {
   const kw = docKeyword.value.trim().toLowerCase()
-  if (!kw) return documents.value
-  return documents.value.filter(d => String(d.filename || '').toLowerCase().includes(kw))
+  return documents.value.filter((d) => {
+      if (kw && !String(d.filename || '').toLowerCase().includes(kw)) return false
+      if (formatFilter.value && formatOf(d.filename) !== formatFilter.value) return false
+      return true
+  })
 })
+
+const formatOptions = computed(() => [...new Set(documents.value.map(d => formatOf(d.filename)))])
 
 const knownSizeCount = computed(
   () => documents.value.filter(d => sizes.value[d.document_id] != null).length
@@ -270,6 +285,7 @@ function openDetail() {
 function closeDetail() {
   detailOpen.value = false
   docKeyword.value = ''
+  formatFilter.value = ''
 }
 
 /* ===== 队列管理 ===== */
@@ -631,7 +647,7 @@ function statusText(item) {
 
 .detail-toolbar {
   display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
-  padding: 0 12px; height: 36px; max-width: 280px; border-radius: var(--radius);
+  padding: 0 12px; height: 36px; max-width: 440px; border-radius: var(--radius);
   background: var(--bg-input); border: 1px solid transparent;
   color: var(--text-secondary); transition: border-color 0.15s;
 }
