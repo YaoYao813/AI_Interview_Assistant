@@ -13,7 +13,7 @@
       empty-desc="点击上方按钮开始新对话"
       @create="chatStore.createConversation()"
       @switch="chatStore.switchConversation"
-      @delete="chatStore.deleteConversation"
+      @delete="handleDeleteConversation"
     >
       <template #footer>
         <span class="stat-line">
@@ -60,7 +60,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { chatQuery, getKnowledgeStatistics } from '@/api/knowledge'
 import { useChatStore } from '@/stores/chat'
 import ChatMessage from '@/components/chat/ChatMessage.vue'
@@ -74,6 +74,28 @@ const loadingConvIds = ref(new Set())
 const isLoading = computed(() => loadingConvIds.value.has(chatStore.activeId))
 const msgContainer = ref(null)
 const stats = ref({ document_count: 0, chunk_count: 0 })
+
+// convId -> AbortController：删除会话、离开页面时掐断仍在读的流。
+// 切换会话不掐断——loading 已是会话级的，后台流跑完属于预期行为。
+const streamControllers = new Map()
+
+function abortStream(convId) {
+  const controller = streamControllers.get(convId)
+  if (controller) {
+    controller.abort()
+    streamControllers.delete(convId)
+  }
+}
+
+function handleDeleteConversation(id) {
+  abortStream(id)
+  chatStore.deleteConversation(id)
+}
+
+onUnmounted(() => {
+  for (const controller of streamControllers.values()) controller.abort()
+  streamControllers.clear()
+})
 
 onMounted(async () => {
   chatStore.ensureActiveConversation()
@@ -116,11 +138,16 @@ async function sendStream(question, top_k, threshold, history, convId) {
   const msgIndex = conv.messages.length - 1
   chatStore.updateMessage(convId, msgIndex, { isLoading: true })
 
+  const controller = new AbortController()
+  streamControllers.set(convId, controller)
+  let aborted = false
+
   try {
     const response = await fetch('/api/v1/rag/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, top_k, threshold, history }),
+      signal: controller.signal,
     })
     if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
 
@@ -146,12 +173,19 @@ async function sendStream(question, top_k, threshold, history, convId) {
       }
     }
   } catch (e) {
-    // 出错时保留已生成内容，但必须在控制台留痕，否则问题无从定位
-    console.warn('[KnowledgeChat] 流式请求中断：', e)
+    // 主动中断不是错误，不必上报；其余异常必须留痕，否则问题无从定位
+    if (e?.name === 'AbortError') {
+      aborted = true
+    } else {
+      console.warn('[KnowledgeChat] 流式请求中断：', e)
+    }
   } finally {
+    streamControllers.delete(convId)
     const msg = chatStore.conversations.find(c => c.id === convId)?.messages[msgIndex]
     const patch = { isLoading: false }
-    if (msg && !msg.content) patch.content = '请求失败，请检查后端服务。'
+    if (msg && !msg.content) {
+      patch.content = aborted ? '（已停止生成）' : '请求失败，请检查后端服务。'
+    }
     chatStore.updateMessage(convId, msgIndex, patch)
     // 流结束后立刻落盘，不等节流窗口
     chatStore.flushPersist()
