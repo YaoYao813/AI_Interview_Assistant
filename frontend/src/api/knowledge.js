@@ -1,10 +1,11 @@
-import request from './request'
+import request, { TIMEOUT } from './request'
 
 // ===== 知识库管理 =====
 
 export function uploadDocument(formData) {
   return request.post('/knowledge/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: TIMEOUT.UPLOAD,
   })
 }
 
@@ -26,6 +27,7 @@ export function getKnowledgeStatistics() {
 
 // ===== RAG 问答 =====
 
-export function chatQuery(data, config) {
-  return request.post('/rag/chat', data, config)
+export function chatQuery(data, config = {}) {
+  // 调用方传的是 { signal }（用于中断），档位放在前面，调用方仍可覆盖
+  return request.post('/rag/chat', data, { timeout: TIMEOUT.LLM, ...config })
 }

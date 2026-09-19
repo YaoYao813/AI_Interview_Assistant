@@ -1,15 +1,16 @@
-import request, { API_BASE } from './request'
+import request, { API_BASE, TIMEOUT } from './request'
 
 // 流式评价：直连 fetch，不走 axios，故单独暴露地址
 export const EVALUATE_STREAM_URL = `${API_BASE}/interview/evaluate/stream`
 
 export function startInterview(data) {
-  return request.post('/interview/start', data)
+  return request.post('/interview/start', data, { timeout: TIMEOUT.LLM_LONG })
 }
 
 export function evaluateAnswer(sessionId, answer) {
-  return request.post('/interview/evaluate', {
-    session_id: sessionId,
-    answer,
-  })
+  return request.post(
+    '/interview/evaluate',
+    { session_id: sessionId, answer },
+    { timeout: TIMEOUT.LLM },
+  )
 }
