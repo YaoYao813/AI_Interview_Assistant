@@ -27,8 +27,35 @@ export const useChatStore = defineStore('chat', () => {
   )
 
   // ===== 持久化 =====
+  // 流式回答逐 token 触发写入，这边节流到每 PERSIST_THROTTLE_MS 最多一次。
+  // 写入失败（localStorage 配额溢出）只告警不抛出：异常若从 persist 冒出去，
+  // 会冲出流式读取循环并被外层 catch 吞掉，表现为回答打到一半突然中断。
+  const PERSIST_THROTTLE_MS = 300
+  let persistTimer = null
+
+  function writeToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations.value))
+    } catch (e) {
+      console.warn('[chat] 会话持久化失败，可能已超出 localStorage 配额：', e)
+    }
+  }
+
   function persist() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations.value))
+    if (persistTimer) return
+    persistTimer = setTimeout(() => {
+      persistTimer = null
+      writeToStorage()
+    }, PERSIST_THROTTLE_MS)
+  }
+
+  // 结构性操作与流结束时用：立即落盘，不等节流窗口
+  function flushPersist() {
+    if (persistTimer) {
+      clearTimeout(persistTimer)
+      persistTimer = null
+    }
+    writeToStorage()
   }
 
   // ===== 对话 CRUD =====
@@ -44,7 +71,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     conversations.value.unshift(conv)
     activeId.value = conv.id
-    persist()
+    flushPersist()
     return conv
   }
 
@@ -55,7 +82,7 @@ export const useChatStore = defineStore('chat', () => {
     if (activeId.value === id) {
       activeId.value = conversations.value[0]?.id || null
     }
-    persist()
+    flushPersist()
   }
 
   function switchConversation(id) {
@@ -118,5 +145,6 @@ export const useChatStore = defineStore('chat', () => {
     addMessage,
     updateMessage,
     getHistoryForApi,
+    flushPersist,
   }
 })

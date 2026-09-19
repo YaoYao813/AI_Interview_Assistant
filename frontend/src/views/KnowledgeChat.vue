@@ -145,13 +145,16 @@ async function sendStream(question, top_k, threshold, history, convId) {
         }
       }
     }
-  } catch {
-    // 出错时保留已生成内容
+  } catch (e) {
+    // 出错时保留已生成内容，但必须在控制台留痕，否则问题无从定位
+    console.warn('[KnowledgeChat] 流式请求中断：', e)
   } finally {
     const msg = chatStore.conversations.find(c => c.id === convId)?.messages[msgIndex]
     const patch = { isLoading: false }
     if (msg && !msg.content) patch.content = '请求失败，请检查后端服务。'
     chatStore.updateMessage(convId, msgIndex, patch)
+    // 流结束后立刻落盘，不等节流窗口
+    chatStore.flushPersist()
   }
 }
 
