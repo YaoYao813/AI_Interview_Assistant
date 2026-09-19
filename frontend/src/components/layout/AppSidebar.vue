@@ -18,19 +18,26 @@
     </nav>
 
     <div class="rail-footer">
-      <span v-if="appStore.isAdmin" class="rail-badge" title="管理员">管理员</span>
-      <div class="rail-avatar" title="Yao">Y</div>
+      <span v-if="appStore.isAdmin" class="rail-badge">管理员</span>
+      <button
+        class="rail-avatar"
+        :title="appStore.isAdmin ? '管理员 — 点击切换为普通用户' : '普通用户 — 点击切换为管理员'"
+        @click="toggleRole"
+      >
+        Y
+      </button>
     </div>
   </aside>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import LineIcon from '@/components/common/LineIcon.vue'
 
 const route = useRoute()
+const router = useRouter()
 const appStore = useAppStore()
 
 const allMenu = [
@@ -48,6 +55,13 @@ const visibleMenu = computed(() =>
 
 function isActive(path) {
   return path === '/' ? route.path === '/' : route.path.startsWith(path)
+}
+
+function toggleRole() {
+  const next = appStore.isAdmin ? 'user' : 'admin'
+  appStore.setUserRole(next)
+  // 守卫只在导航时触发，降级时若正停在 /admin/ 页面上不会自动重跑，需手动踢回首页
+  if (next === 'user' && route.path.startsWith('/admin/')) router.push('/')
 }
 </script>
 
@@ -82,6 +96,7 @@ function isActive(path) {
 .rail-badge { font-size: 10px; color: var(--text-secondary); letter-spacing: 0.5px; }
 .rail-avatar {
   width: 32px; height: 32px; border-radius: 50%; background: var(--bg-hover);
+  border: none; padding: 0; font-family: inherit; cursor: pointer;
   color: var(--text-primary); font-size: 13px; font-weight: 600;
   display: flex; align-items: center; justify-content: center; user-select: none;
 }
