@@ -17,9 +17,9 @@
         @keydown.enter.exact="handleSend"
         resize="none"
       />
-      <el-button type="primary" :disabled="!question.trim() || loading" @click="handleSend">
-        <span v-if="loading">思考中...</span>
-        <span v-else>发送 →</span>
+      <el-button v-if="loading" @click="handleStop">停止生成</el-button>
+      <el-button type="primary" :disabled="!question.trim()" @click="handleSend">
+        发送 →
       </el-button>
     </div>
   </div>
@@ -28,7 +28,7 @@
 <script setup>
 import { ref } from 'vue'
 
-const emit = defineEmits(['send'])
+const emit = defineEmits(['send', 'stop'])
 
 defineProps({
   loading: { type: Boolean, default: false },
@@ -44,6 +44,10 @@ function handleSend() {
   if (!q) return
   emit('send', { question: q, stream: streamMode.value, top_k: topK.value, threshold: threshold.value })
   question.value = ''
+}
+
+function handleStop() {
+  emit('stop')
 }
 </script>
 

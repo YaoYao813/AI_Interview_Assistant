@@ -53,7 +53,7 @@
           />
         </div>
 
-        <ChatInput :loading="isLoading" @send="handleSend" />
+        <ChatInput :loading="isLoading" @send="handleSend" @stop="handleStop" />
       </template>
     </div>
   </div>
@@ -70,21 +70,25 @@ import ConversationSidebar from '@/components/common/ConversationSidebar.vue'
 import LineIcon from '@/components/common/LineIcon.vue'
 
 const chatStore = useChatStore()
-const loadingConvIds = ref(new Set())
-const isLoading = computed(() => loadingConvIds.value.has(chatStore.activeId))
+// convId -> AbortController。这一份映射同时承担「该会话是否有请求在跑」，
+// 所以必须是响应式的、由它派生 isLoading，不能再另开一个平行的 Set 记录 loading。
+// 只放 AbortController：Vue 不会把它包成响应式代理，下面两处 === 身份比较才成立
+// （换成普通对象会被代理，比较恒为 false，finally 就永远清不掉、loading 卡死）。
+const streamControllers = ref(new Map())
+const isLoading = computed(() => streamControllers.value.has(chatStore.activeId))
 const msgContainer = ref(null)
 const stats = ref({ document_count: 0, chunk_count: 0 })
 
-// convId -> AbortController：删除会话、离开页面时掐断仍在读的流。
-// 切换会话不掐断——loading 已是会话级的，后台流跑完属于预期行为。
-const streamControllers = new Map()
-
 function abortStream(convId) {
-  const controller = streamControllers.get(convId)
+  const controller = streamControllers.value.get(convId)
   if (controller) {
     controller.abort()
-    streamControllers.delete(convId)
+    streamControllers.value.delete(convId)
   }
+}
+
+function handleStop() {
+  abortStream(chatStore.activeId)
 }
 
 function handleDeleteConversation(id) {
@@ -92,9 +96,11 @@ function handleDeleteConversation(id) {
   chatStore.deleteConversation(id)
 }
 
+// 切换会话刻意不断开：loading 是会话级的，后台跑完落回自己的会话属于预期行为。
+// 离开页面则必须断开，否则连接会在组件销毁后继续读。
 onUnmounted(() => {
-  for (const controller of streamControllers.values()) controller.abort()
-  streamControllers.clear()
+  for (const controller of streamControllers.value.values()) controller.abort()
+  streamControllers.value.clear()
 })
 
 onMounted(async () => {
@@ -107,39 +113,52 @@ onMounted(async () => {
 
 async function handleSend({ question, top_k, threshold, stream }) {
   const convId = chatStore.activeId
-  if (loadingConvIds.value.has(convId) || !chatStore.activeConversation) return
+  if (!chatStore.activeConversation) return
+
+  // 同一会话还有请求在跑：先掐断旧的，让新问题立刻发出去
+  abortStream(convId)
+
+  const controller = new AbortController()
+  streamControllers.value.set(convId, controller)
 
   chatStore.addMessage('user', question, [], convId)
   scrollToBottom()
-  loadingConvIds.value.add(convId)
 
   const history = chatStore.getHistoryForApi(10, convId)
 
   if (stream) {
-    await sendStream(question, top_k, threshold, history, convId)
+    await sendStream(question, top_k, threshold, history, convId, controller)
   } else {
     try {
-      const res = await chatQuery({ question, top_k, threshold, history })
+      const res = await chatQuery(
+        { question, top_k, threshold, history },
+        { signal: controller.signal },
+      )
       const data = res.data || {}
       chatStore.addMessage('assistant', data.answer || '', data.sources || [], convId)
-    } catch {
-      chatStore.addMessage('assistant', '请求失败，请检查后端服务。', [], convId)
+    } catch (e) {
+      // 被新问题掐断的请求不提示失败
+      const aborted = e?.name === 'CanceledError' || e?.name === 'AbortError'
+      if (!aborted) {
+        chatStore.addMessage('assistant', '请求失败，请检查后端服务。', [], convId)
+      }
+    } finally {
+      if (streamControllers.value.get(convId) === controller) {
+        streamControllers.value.delete(convId)
+      }
     }
   }
 
-  loadingConvIds.value.delete(convId)
   await nextTick()
   scrollToBottom()
 }
 
-async function sendStream(question, top_k, threshold, history, convId) {
+async function sendStream(question, top_k, threshold, history, convId, controller) {
   chatStore.addMessage('assistant', '', [], convId)
   const conv = chatStore.conversations.find(c => c.id === convId)
   const msgIndex = conv.messages.length - 1
   chatStore.updateMessage(convId, msgIndex, { isLoading: true })
 
-  const controller = new AbortController()
-  streamControllers.set(convId, controller)
   let aborted = false
 
   try {
@@ -180,7 +199,10 @@ async function sendStream(question, top_k, threshold, history, convId) {
       console.warn('[KnowledgeChat] 流式请求中断：', e)
     }
   } finally {
-    streamControllers.delete(convId)
+    // 只有当映射里还是自己时才清理：新一轮请求可能已经顶掉了这个位置
+    if (streamControllers.value.get(convId) === controller) {
+      streamControllers.value.delete(convId)
+    }
     const msg = chatStore.conversations.find(c => c.id === convId)?.messages[msgIndex]
     const patch = { isLoading: false }
     if (msg && !msg.content) {

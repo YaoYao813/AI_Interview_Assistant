@@ -26,6 +26,6 @@ export function getKnowledgeStatistics() {
 
 // ===== RAG 问答 =====
 
-export function chatQuery(data) {
-  return request.post('/rag/chat', data)
+export function chatQuery(data, config) {
+  return request.post('/rag/chat', data, config)
 }
