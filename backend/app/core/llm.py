@@ -86,12 +86,13 @@ class LLMClient:
         except Exception as e:
             raise RuntimeError(f"LLM JSON 调用失败: {e}") from e
 
-    async def chat_stream(self, messages: list[dict]):
+    async def chat_stream(self, messages: list[dict], temperature: float | None = None):
         """
         流式对话
 
         Args:
             messages: 标准 OpenAI messages 格式
+            temperature: 不传则用 API 默认值
 
         Yields:
             str: 逐步生成的文本片段
@@ -100,11 +101,10 @@ class LLMClient:
             RuntimeError: 调用失败
         """
         try:
-            stream = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                stream=True,
-            )
+            kwargs: dict = {"model": self.model, "messages": messages, "stream": True}
+            if temperature is not None:
+                kwargs["temperature"] = temperature
+            stream = await self.client.chat.completions.create(**kwargs)
             async for chunk in stream:
                 if chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content

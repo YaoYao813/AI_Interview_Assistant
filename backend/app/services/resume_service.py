@@ -1,11 +1,16 @@
 import json
+import logging
 import re
 import uuid
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 from app.core.config import settings
 from app.infrastructure.document_loader import load
 from app.services.llm_service import get_llm_service, LLMService
+from app.utils.sse import sse_event
+
+logger = logging.getLogger(__name__)
 
 
 # ========== Prompt 模板 ==========
@@ -279,6 +284,48 @@ class ResumeService:
         Returns:
             LLM 回复文本
         """
+        system_prompt = self._build_chat_system_prompt(
+            resume_text, analysis_result, message, history
+        )
+        return await self._llm.chat(
+            system_prompt=system_prompt,
+            user_message=message,
+        )
+
+    async def chat_stream(
+        self,
+        resume_text: str,
+        analysis_result: dict,
+        message: str,
+        history: list[dict] | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """基于简历上下文的多轮追问（SSE 流式）
+
+        Yields:
+            data: {"type": "token", "data": "..."}
+            data: {"type": "done"}
+        """
+        system_prompt = self._build_chat_system_prompt(
+            resume_text, analysis_result, message, history
+        )
+        try:
+            async for token in self._llm.chat_stream(system_prompt, message):
+                if token:
+                    yield sse_event("token", token)
+        except Exception:
+            logger.exception("简历追问流式调用失败")
+            yield sse_event("token", "AI 服务暂时不可用，请稍后重试。")
+
+        yield sse_event("done")
+
+    def _build_chat_system_prompt(
+        self,
+        resume_text: str,
+        analysis_result: dict,
+        message: str,
+        history: list[dict] | None = None,
+    ) -> str:
+        """构造追问的 System Prompt（流式与非流式共用）"""
         # 将分析报告压缩为摘要（避免 token 爆炸）
         analysis_summary = self._summarize_analysis(analysis_result)
 
@@ -291,16 +338,11 @@ class ResumeService:
                 parts.append(f"**{role}**: {h.get('content', '')}")
             history_text = "\n".join(parts)
 
-        system_prompt = RESUME_CHAT_SYSTEM_PROMPT.format(
+        return RESUME_CHAT_SYSTEM_PROMPT.format(
             resume_text=resume_text,
             analysis_summary=analysis_summary,
             history=history_text,
             message=message,
-        )
-
-        return await self._llm.chat(
-            system_prompt=system_prompt,
-            user_message=message,
         )
 
     def _summarize_analysis(self, result: dict) -> str:

@@ -102,7 +102,7 @@
           </el-card>
 
           <!-- 答题区（评价前） -->
-          <el-card v-if="!evaluation" class="answer-card" shadow="never">
+          <el-card v-if="!evaluation && !evaluating" class="answer-card" shadow="never">
             <el-input
               v-model="answer"
               type="textarea"
@@ -121,21 +121,27 @@
             </el-button>
           </el-card>
 
-          <!-- 评价结果（提交后） -->
+          <!-- 评价结果（评价中逐段流式，完成后展示完整内容） -->
           <el-card v-else class="evaluation-card" shadow="never">
             <div class="eval-score">
-              <span class="score-num">{{ evaluation.score }}</span>
+              <span class="score-num">{{ shownEval.score ?? '—' }}</span>
               <span class="score-label">分</span>
             </div>
             <div class="eval-section">
               <h4><LineIcon name="chat" :size="14" /> 面试官反馈</h4>
-              <p class="eval-feedback">{{ evaluation.feedback }}</p>
+              <p class="eval-feedback">{{ shownEval.feedback }}</p>
             </div>
             <div class="eval-section">
               <h4><LineIcon name="note" :size="14" /> 参考答案</h4>
-              <p class="eval-model-answer">{{ evaluation.model_answer }}</p>
+              <p class="eval-model-answer">{{ shownEval.model_answer }}</p>
             </div>
-            <el-button type="primary" size="large" @click="handleNext" style="width: 100%">
+            <el-button
+              v-if="evaluation && !evaluating"
+              type="primary"
+              size="large"
+              @click="handleNext"
+              style="width: 100%"
+            >
               下一题 →
             </el-button>
           </el-card>
@@ -174,8 +180,9 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { startInterview, evaluateAnswer } from '@/api/interview'
+import { startInterview, EVALUATE_STREAM_URL } from '@/api/interview'
 import { useInterviewStore } from '@/stores/interview'
+import { streamSSE } from '@/utils/sse'
 import ConversationSidebar from '@/components/common/ConversationSidebar.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import LineIcon from '@/components/common/LineIcon.vue'
@@ -221,6 +228,13 @@ const averageScore = computed(() => {
 // 简历文件（File 对象，无法序列化，切换会话时清空）
 const resumeFile = ref(null)
 watch(() => store.activeId, () => { resumeFile.value = null })
+
+// 评价流式内容暂存组件内，只在流结束时写一次会话（避免逐 token 全量落库）
+const streamingEval = ref(null)
+// 优先展示已落库的评价，评价过程中展示流式中的内容
+const shownEval = computed(
+  () => evaluation.value || streamingEval.value || { score: null, feedback: '', model_answer: '' }
+)
 
 function titleOf(conv) {
   return conv.role || '未命名面试'
@@ -282,28 +296,64 @@ async function handleSubmit() {
   if (!a || conv.evaluating) return
 
   const convId = conv.id
+  const sessionId = conv.sessionId
+  const question = conv.currentQuestion
+
+  streamingEval.value = { score: null, feedback: '', model_answer: '' }
   store.updateConversation(convId, { evaluating: true })
+
+  let done = null
+  let failure = null
   try {
-    const res = await evaluateAnswer(conv.sessionId, a)
-    const data = res.data || {}
-    store.updateConversation(convId, {
-      rounds: [...conv.rounds, {
-        question: conv.currentQuestion,
-        answer: a,
-        score: data.score,
-        feedback: data.feedback,
-        model_answer: data.model_answer,
-      }],
-      evaluation: data,
-      currentIndex: data.current_index,
-      finished: data.is_finished,
-      answer: '',
-      evaluating: false,
-    })
+    await streamSSE(
+      EVALUATE_STREAM_URL,
+      { session_id: sessionId, answer: a },
+      (evt) => {
+        const cur = streamingEval.value
+        if (evt.type === 'score') {
+          streamingEval.value = { ...cur, score: evt.data }
+        } else if (evt.type === 'feedback') {
+          streamingEval.value = { ...cur, feedback: cur.feedback + (evt.data || '') }
+        } else if (evt.type === 'model_answer') {
+          streamingEval.value = { ...cur, model_answer: cur.model_answer + (evt.data || '') }
+        } else if (evt.type === 'done') {
+          done = evt.data || null
+        } else if (evt.type === 'error') {
+          failure = evt.data || '评价失败'
+        }
+      },
+    )
   } catch (e) {
-    ElMessage.error(e?.response?.data?.message || '评价失败')
-    store.updateConversation(convId, { evaluating: false })
+    failure = e?.message || '评价失败'
   }
+
+  if (!failure && !done) failure = '评价未完成，请重试'
+  if (failure) {
+    ElMessage.error(failure)
+    store.updateConversation(convId, { evaluating: false })
+    streamingEval.value = null
+    return
+  }
+
+  // 流结束后一次性落库，并写回「发起时」的会话
+  const latest = store.conversations.find(c => c.id === convId)
+  if (latest) {
+    store.updateConversation(convId, {
+      rounds: [...(latest.rounds || []), {
+        question,
+        answer: a,
+        score: done.score,
+        feedback: done.feedback,
+        model_answer: done.model_answer,
+      }],
+      evaluation: done,
+      currentIndex: done.current_index,
+      finished: done.is_finished,
+      answer: '',
+    })
+  }
+  store.updateConversation(convId, { evaluating: false })
+  streamingEval.value = null
 }
 
 function handleNext() {

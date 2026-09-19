@@ -1,7 +1,10 @@
 import axios from 'axios'
 
+// 所有接口的公共前缀；流式接口（fetch 直连，不走 axios）也复用它
+export const API_BASE = '/api/v1'
+
 const request = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE,
   timeout: 30000,
 })
 

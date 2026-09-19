@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_resume_svc
 from app.models.common import ApiResponse
@@ -30,3 +31,19 @@ async def chat(
         history=req.history,
     )
     return ApiResponse(data={"reply": reply})
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    req: ResumeChatRequest,
+    resume_svc: ResumeService = Depends(get_resume_svc),
+):
+    return StreamingResponse(
+        resume_svc.chat_stream(
+            resume_text=req.resume_text,
+            analysis_result=req.analysis_result,
+            message=req.message,
+            history=req.history,
+        ),
+        media_type="text/event-stream",
+    )

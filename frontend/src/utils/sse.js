@@ -1,0 +1,49 @@
+/**
+ * 读取服务端 SSE 流并逐个事件回调。
+ *
+ * 后端事件格式：`data: {"type": "...", "data": ...}\n\n`
+ * 一个网络分片可能包含多条事件、也可能把一条事件切成两半，
+ * 因此这里按 `\n\n` 缓冲切分，剩余不完整部分留到下一轮。
+ *
+ * @param {string} url      请求地址（走 vite 代理的相对路径）
+ * @param {object} payload  POST 的 JSON 体
+ * @param {(evt: object) => void} onEvent  每个事件的回调
+ * @param {{ signal?: AbortSignal }} [options]
+ */
+export async function streamSSE(url, payload, onEvent, options = {}) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: options.signal,
+  })
+  if (!response.ok || !response.body) {
+    throw new Error(`HTTP ${response.status}`)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    let sep
+    while ((sep = buffer.indexOf('\n\n')) !== -1) {
+      const rawEvent = buffer.slice(0, sep)
+      buffer = buffer.slice(sep + 2)
+      for (const line of rawEvent.split('\n')) {
+        if (!line.startsWith('data: ')) continue
+        let evt
+        try {
+          evt = JSON.parse(line.slice(6))
+        } catch {
+          continue
+        }
+        onEvent(evt)
+      }
+    }
+  }
+}

@@ -165,11 +165,11 @@
               </section>
             </div>
 
-            <!-- 加载中（追问时） -->
+            <!-- 追问中：流式逐字渲染（内容暂存组件内，结束时才写入会话） -->
             <ChatMessage
               v-if="chatLoading"
               role="assistant"
-              content=""
+              :content="streamingReply"
               :sources="[]"
               :is-loading="true"
             />
@@ -209,8 +209,9 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { analyzeResume, resumeChat } from '@/api/resume'
+import { analyzeResume, RESUME_CHAT_STREAM_URL } from '@/api/resume'
 import { useResumeStore } from '@/stores/resume'
+import { streamSSE } from '@/utils/sse'
 import ChatMessage from '@/components/chat/ChatMessage.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ConversationSidebar from '@/components/common/ConversationSidebar.vue'
@@ -243,6 +244,8 @@ const question = computed({
 })
 
 const msgContainer = ref(null)
+// 追问流式内容暂存组件内，只在流结束时写一次 localStorage
+const streamingReply = ref('')
 
 function titleOf(conv) {
   return conv.filename || '未命名简历'
@@ -307,35 +310,45 @@ async function handleAsk() {
   const convId = conv.id
   const msgs = [...conv.messages, { role: 'user', content: q, sources: [] }]
   store.updateConversation(convId, { messages: msgs, question: '', chatLoading: true })
+  streamingReply.value = ''
   await nextTick()
   scrollToBottom()
 
-  try {
-    const history = msgs
-      .filter(m => m.role !== 'system' && !m.content.startsWith('上传了简历文件') && !m.content.startsWith('### 分析报告'))
-      .slice(-8)
-      .map(m => ({ role: m.role, content: m.content }))
+  const history = msgs
+    .filter(m => m.role !== 'system' && !m.content.startsWith('上传了简历文件') && !m.content.startsWith('### 分析报告'))
+    .slice(-8)
+    .map(m => ({ role: m.role, content: m.content }))
 
-    const res = await resumeChat({
-      resume_text: conv.resumeText,
-      analysis_result: conv.result,
-      message: q,
-      history: history.slice(0, -1),  // 不含当前这条
-    })
-    const reply = res.data?.reply || '抱歉，AI 服务暂时不可用。'
-    store.updateConversation(convId, {
-      messages: [...msgs, { role: 'assistant', content: reply, sources: [] }],
-      chatLoading: false,
-    })
+  let reply = ''
+  try {
+    await streamSSE(
+      RESUME_CHAT_STREAM_URL,
+      {
+        resume_text: conv.resumeText,
+        analysis_result: conv.result,
+        message: q,
+        history: history.slice(0, -1),  // 不含当前这条
+      },
+      (evt) => {
+        if (evt.type === 'token') {
+          reply += evt.data || ''
+          streamingReply.value = reply
+          scrollToBottom()
+        }
+      },
+    )
   } catch {
-    store.updateConversation(convId, {
-      messages: [...msgs, { role: 'assistant', content: '请求失败，请检查后端服务。', sources: [] }],
-      chatLoading: false,
-    })
-  } finally {
-    await nextTick()
-    scrollToBottom()
+    // 保留已生成的内容；完全没拿到内容才给失败兜底
   }
+
+  // 只在流结束后写一次 localStorage，避免逐 token 全量序列化
+  store.updateConversation(convId, {
+    messages: [...msgs, { role: 'assistant', content: reply || '请求失败，请检查后端服务。', sources: [] }],
+    chatLoading: false,
+  })
+  streamingReply.value = ''
+  await nextTick()
+  scrollToBottom()
 }
 
 function scrollToBottom() {

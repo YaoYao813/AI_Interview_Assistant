@@ -84,13 +84,19 @@ class LLMService:
             max_tokens=max_tokens,
         )
 
-    async def chat_stream(self, system_prompt: str, user_message: str):
+    async def chat_stream(
+        self,
+        system_prompt: str,
+        user_message: str,
+        temperature: float | None = None,
+    ):
         """
         流式对话（逐 token 返回，适合 SSE 推送）
 
         Args:
             system_prompt: 系统提示词
             user_message: 用户消息
+            temperature: 不传则用 API 默认值
 
         Yields:
             str: 逐步生成的文本片段
@@ -102,7 +108,7 @@ class LLMService:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
         ]
-        async for chunk in self.client.chat_stream(messages):
+        async for chunk in self.client.chat_stream(messages, temperature=temperature):
             yield chunk
 
     # ========== 辅助方法 ==========
