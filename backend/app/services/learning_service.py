@@ -13,6 +13,10 @@ logger = logging.getLogger(__name__)
 # 又让用户干等几分钟，缓存一天足够 —— 学习路线本身不会在一天内变化。
 ROADMAP_CACHE_PREFIX = "learning:roadmap:"
 ROADMAP_CACHE_TTL = 86400
+# 改 ROADMAP_SYSTEM_PROMPT 或 RoadmapResult 结构时必须 +1。缓存里存的是「旧 prompt 的
+# 产出」，键里不带版本号的话，改完 prompt 后旧结果会继续被返回最多一整天，
+# 表现成「改了 prompt 没生效」—— 而且新旧结果的 JSON 结构都能通过校验，不会报错。
+ROADMAP_CACHE_VERSION = 1
 
 
 def _roadmap_cache_key(target_role: str, resume_text: str) -> str:
@@ -23,7 +27,7 @@ def _roadmap_cache_key(target_role: str, resume_text: str) -> str:
     digest = hashlib.sha256(
         f"{len(target_role)}:{target_role}\n{resume_text}".encode("utf-8")
     ).hexdigest()
-    return f"{ROADMAP_CACHE_PREFIX}{digest[:32]}"
+    return f"{ROADMAP_CACHE_PREFIX}v{ROADMAP_CACHE_VERSION}:{digest[:32]}"
 
 
 ROADMAP_SYSTEM_PROMPT = """你是一位资深的职业规划导师和技术教练。你的任务是根据用户的简历内容和目标岗位，
@@ -84,18 +88,26 @@ class LearningService:
 
     async def _load_cached(self, target_role: str, resume_text: str) -> RoadmapResult | None:
         if self.cache is None:
+            # 不是「未命中」而是「根本没开缓存」（单例被非请求路径调用）。
+            # 两者都不命中，但混在一起会让命中率统计失真，所以分开打点。
+            logger.debug("学习路线缓存未启用，跳过查询")
             return None
+
+        key = _roadmap_cache_key(target_role, resume_text)
         try:
-            raw = await self.cache.get(_roadmap_cache_key(target_role, resume_text))
+            raw = await self.cache.get(key)
         except Exception as exc:
             # Redis 挂掉不该把「生成路线」这个原本不依赖 Redis 的功能一起拖下水，
             # 降级成未命中，照常走 LLM。
             logger.warning("学习路线缓存读取失败，按未命中处理: %s", exc)
             return None
         if raw is None:
+            # 命中/未命中各留一条 INFO：这是判断「缓存到底有没有用」的唯一依据，
+            # 只打失败路径的话，命中率是不可测的。
+            logger.info("学习路线缓存未命中: %s", key)
             return None
         try:
-            return RoadmapResult(**json.loads(raw))
+            result = RoadmapResult(**json.loads(raw))
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             # 结构对不上（字段改名、旧版本残留）就当没缓存，而不是把坏数据抛给用户。
             # ValidationError 是 ValueError 的子类；TypeError 覆盖「合法 JSON 但不是对象」
@@ -103,20 +115,26 @@ class LearningService:
             logger.warning("学习路线缓存数据损坏，按未命中处理: %s", exc)
             return None
 
+        logger.info("学习路线缓存命中: %s", key)
+        return result
+
     async def _store_cached(
         self, target_role: str, resume_text: str, result: RoadmapResult
     ) -> None:
         if self.cache is None:
             return
+        key = _roadmap_cache_key(target_role, resume_text)
         try:
             await self.cache.set(
-                _roadmap_cache_key(target_role, resume_text),
+                key,
                 json.dumps(result.model_dump(), ensure_ascii=False),
                 ttl=ROADMAP_CACHE_TTL,
             )
         except Exception as exc:
             # 写不进去只是这次没省下 token，用户已经拿到结果了，不能为此报错。
             logger.warning("学习路线缓存写入失败: %s", exc)
+            return
+        logger.info("学习路线缓存已写入: %s (ttl=%ss)", key, ROADMAP_CACHE_TTL)
 
     async def analyze_gaps(
         self,
