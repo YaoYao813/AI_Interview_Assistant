@@ -102,18 +102,30 @@
           <!-- 已上传文档：汇总入口卡片 -->
           <section class="summary-section">
             <h3>已上传文档</h3>
-            <div class="summary-card" @click="openDetail">
-              <LineIcon class="summary-icon" name="book" :size="26" />
-              <div class="summary-body">
-                <span class="summary-num">{{ stats.document_count }}</span>
-                <span class="summary-unit">篇文档已入库</span>
-                <span class="summary-time">最近更新：{{ lastUpdatedText }}</span>
+
+            <div v-if="loadError" class="load-error">
+              <LineIcon class="load-error-icon" name="alert" :size="20" />
+              <div class="load-error-body">
+                <span class="load-error-title">数据加载失败</span>
+                <span class="load-error-desc">{{ loadError }}</span>
               </div>
-              <span class="summary-link">
-                查看全部<LineIcon name="arrow-right" :size="14" />
-              </span>
+              <el-button size="small" :loading="tableLoading" @click="refreshAll">重试</el-button>
             </div>
-            <p class="summary-tip">共 {{ stats.chunk_count }} 个文本块 · 存储引擎 ChromaDB</p>
+
+            <template v-else>
+              <div class="summary-card" @click="openDetail">
+                <LineIcon class="summary-icon" name="book" :size="26" />
+                <div class="summary-body">
+                  <span class="summary-num">{{ stats.document_count }}</span>
+                  <span class="summary-unit">篇文档已入库</span>
+                  <span class="summary-time">最近更新：{{ lastUpdatedText }}</span>
+                </div>
+                <span class="summary-link">
+                  查看全部<LineIcon name="arrow-right" :size="14" />
+                </span>
+              </div>
+              <p class="summary-tip">共 {{ stats.chunk_count }} 个文本块 · 存储引擎 ChromaDB</p>
+            </template>
           </section>
         </div>
       </template>
@@ -128,24 +140,34 @@
           <span class="detail-sub">存储引擎 ChromaDB</span>
         </div>
 
+        <div v-if="loadError" class="load-error">
+          <LineIcon class="load-error-icon" name="alert" :size="20" />
+          <div class="load-error-body">
+            <span class="load-error-title">数据加载失败</span>
+            <span class="load-error-desc">{{ loadError }}</span>
+          </div>
+          <el-button size="small" :loading="tableLoading" @click="refreshAll">重试</el-button>
+        </div>
+
+        <!-- 加载失败时数字一律显示「—」而不是 0：0 和「库里真的是空的」长得一模一样 -->
         <div class="stats-row">
           <div class="stat-card">
-            <span class="stat-num">{{ stats.document_count }}</span>
+            <span class="stat-num">{{ loadError ? '—' : stats.document_count }}</span>
             <span class="stat-label">文档总数</span>
           </div>
           <div class="stat-card">
-            <span class="stat-num">{{ stats.chunk_count }}</span>
+            <span class="stat-num">{{ loadError ? '—' : stats.chunk_count }}</span>
             <span class="stat-label">文本块数</span>
           </div>
           <div class="stat-card">
-            <span class="stat-num">{{ totalSizeText }}</span>
+            <span class="stat-num">{{ loadError ? '—' : totalSizeText }}</span>
             <span class="stat-label">总文件大小</span>
-            <span v-if="knownSizeCount < documents.length" class="stat-sub">
+            <span v-if="!loadError && knownSizeCount < documents.length" class="stat-sub">
               已记录 {{ knownSizeCount }}/{{ documents.length }} 篇
             </span>
           </div>
           <div class="stat-card">
-            <span class="stat-num">{{ vectorizedCount }}</span>
+            <span class="stat-num">{{ loadError ? '—' : vectorizedCount }}</span>
             <span class="stat-label">已向量化</span>
           </div>
         </div>
@@ -168,7 +190,7 @@
           :data="filteredDocuments"
           style="width: 100%"
           v-loading="tableLoading"
-          :empty-text="docKeyword ? '没有匹配的文档' : '暂无文档'"
+          :empty-text="loadError ? '加载失败，请重试' : (docKeyword ? '没有匹配的文档' : '暂无文档')"
         >
           <el-table-column prop="filename" label="文件名" min-width="200" show-overflow-tooltip />
           <el-table-column label="格式" width="80" align="center">
@@ -219,6 +241,8 @@ const queue = ref([])
 const uploading = ref(false)
 const progress = ref({ done: 0, total: 0 })
 const tableLoading = ref(false)
+// 非空表示列表/统计加载失败，值是失败原因。用来把「加载失败」和「库里就是空的」分开
+const loadError = ref(null)
 const detailOpen = ref(false)
 const docKeyword = ref('')
 const formatFilter = ref('')
@@ -257,29 +281,27 @@ const lastUpdatedText = computed(() => {
 
 onMounted(() => { refreshAll() })
 
+// 两个请求的成败统一收口在这里，不在各自的 catch 里写 loadError：
+// 它们并发，先成功的那次会把后失败的原因覆盖掉，错误就时有时无。
+// 失败时保留原有数据不清空——请求失败不等于库里没数据，
+// 清空会把一次网络抖动演成「文档全丢了」，而页面还会照着 0 渲染。
 async function refreshAll() {
-  await Promise.all([loadDocuments(), loadStats()])
-}
-
-async function loadDocuments() {
   tableLoading.value = true
   try {
-    const res = await getDocumentList()
-    documents.value = res.data?.documents || []
-  } catch { documents.value = [] }
-  finally { tableLoading.value = false }
-}
-
-async function loadStats() {
-  try {
-    const res = await getKnowledgeStatistics()
-    stats.value = res.data || { document_count: 0, chunk_count: 0 }
-  } catch { /* ignore */ }
+    const [listRes, statsRes] = await Promise.all([getDocumentList(), getKnowledgeStatistics()])
+    documents.value = listRes.data?.documents || []
+    stats.value = statsRes.data || { document_count: 0, chunk_count: 0 }
+    loadError.value = null
+  } catch (e) {
+    loadError.value = e?.response?.data?.message || '无法连接后端服务'
+  } finally {
+    tableLoading.value = false
+  }
 }
 
 function openDetail() {
   detailOpen.value = true
-  loadDocuments()
+  refreshAll()
 }
 
 function closeDetail() {
@@ -608,6 +630,22 @@ function statusText(item) {
 }
 .queue-item:hover .q-remove { opacity: 0.7; }
 .q-remove:hover { opacity: 1; }
+
+/* 加载失败态（主页面与详情页共用） */
+.load-error {
+  display: flex; align-items: center; gap: 12px; padding: 16px 18px;
+  margin-bottom: 20px;
+  background: rgba(192, 136, 136, 0.08);
+  border: 1px solid rgba(192, 136, 136, 0.35);
+  border-radius: var(--radius);
+}
+.load-error-icon { color: #c08888; flex-shrink: 0; }
+.load-error-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.load-error-title { font-size: 14px; color: var(--text-primary); }
+.load-error-desc {
+  font-size: 12px; color: var(--text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* 汇总入口卡片 */
 .summary-card {
