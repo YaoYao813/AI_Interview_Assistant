@@ -35,7 +35,13 @@ export function createConversationStore(storeId, storageKey, defaults = {}) {
     )
 
     function persist() {
-      localStorage.setItem(storageKey, JSON.stringify(conversations.value))
+      // 配额溢出只告警不抛出。这里不是流式热路径（三个模块都刻意把流式内容攒在
+      // 组件内、流结束才写一次），但异常若冒出去，会打断调用它的业务流程。
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(conversations.value))
+      } catch (e) {
+        console.warn(`[${storeId}] 会话持久化失败，可能已超出 localStorage 配额：`, e)
+      }
     }
 
     function createConversation(initial = {}) {
