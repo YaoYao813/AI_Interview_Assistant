@@ -82,7 +82,7 @@
         </div>
 
         <!-- 2. 答题中 / 评价中 -->
-        <div v-else-if="!finished" class="interview-state">
+        <div v-else-if="!interrupted && !finished" class="interview-state">
           <!-- 进度条 -->
           <div class="progress-bar">
             <span class="progress-text">第 {{ currentIndex + 1 }} / {{ total }} 题</span>
@@ -147,14 +147,17 @@
           </el-card>
         </div>
 
-        <!-- 3. 结束总结 -->
+        <!-- 3. 结束总结 / 会话失效中断 -->
         <div v-else class="finished-state">
           <el-card shadow="never">
             <div class="finished-header">
-              <LineIcon class="finished-icon" name="trophy" :size="24" />
-              <h3>面试结束</h3>
+              <LineIcon class="finished-icon" :name="interrupted ? 'alert' : 'trophy'" :size="24" />
+              <h3>{{ interrupted ? '面试已中断' : '面试结束' }}</h3>
             </div>
-            <p class="finished-tip">共 {{ total }} 题，平均分 {{ averageScore.toFixed(1) }}</p>
+            <p v-if="interrupted" class="interrupted-tip">
+              {{ interrupted }}。已完成的 {{ rounds.length }} 题记录保留如下。
+            </p>
+            <p v-else class="finished-tip">共 {{ total }} 题，平均分 {{ averageScore.toFixed(1) }}</p>
 
             <div class="round-list">
               <div v-for="(r, idx) in rounds" :key="idx" class="round-card">
@@ -197,6 +200,7 @@ const currentQuestion = computed(() => store.activeConversation?.currentQuestion
 const evaluation = computed(() => store.activeConversation?.evaluation || null)
 const rounds = computed(() => store.activeConversation?.rounds || [])
 const finished = computed(() => store.activeConversation?.finished || false)
+const interrupted = computed(() => store.activeConversation?.interrupted || null)
 const starting = computed(() => store.activeConversation?.starting || false)
 const evaluating = computed(() => store.activeConversation?.evaluating || false)
 
@@ -241,6 +245,7 @@ function titleOf(conv) {
 }
 
 function summaryOf(conv) {
+  if (conv.interrupted) return '已中断'
   if (conv.finished) return '已完成'
   if (conv.sessionId) return `第 ${conv.currentIndex + 1}/${conv.total} 题`
   return '未开始'
@@ -324,6 +329,15 @@ async function handleSubmit() {
       },
     )
   } catch (e) {
+    // 会话失效（Redis TTL 到期 / 面试已结束）在后端校验阶段就返回 404，流根本没建立。
+    // 这里必须单独收口：否则会话对象里的 sessionId 仍指向已死会话，
+    // 用户之后每次作答都撞同一个 404，界面上没有任何出口。
+    if (e?.status === 404) {
+      store.updateConversation(convId, { evaluating: false, interrupted: e.message })
+      streamingEval.value = null
+      ElMessage.warning(e.message)
+      return
+    }
     failure = e?.message || '评价失败'
   }
 
@@ -425,6 +439,7 @@ function scoreColor(s) {
 .finished-icon { font-size: 24px; }
 .finished-header h3 { margin: 0; font-size: 20px; }
 .finished-tip { color: var(--text-secondary); font-size: 14px; margin: 0 0 16px; }
+.interrupted-tip { color: #c2a066; font-size: 14px; margin: 0 0 16px; line-height: 1.6; }
 .round-list { display: flex; flex-direction: column; gap: 12px; }
 .round-card {
   padding: 14px 16px; border-radius: 8px;

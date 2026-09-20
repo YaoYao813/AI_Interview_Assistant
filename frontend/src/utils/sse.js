@@ -17,8 +17,20 @@ export async function streamSSE(url, payload, onEvent, options = {}) {
     body: JSON.stringify(payload),
     signal: options.signal,
   })
-  if (!response.ok || !response.body) {
-    throw new Error(`HTTP ${response.status}`)
+  if (!response.ok) {
+    // 后端业务异常返回 {success, code, message, detail}，把 message 和 status 带出来。
+    // 只抛 "HTTP 404" 的话，调用方没法区分「会话过期」和「服务挂了」，
+    // 也就没法给用户一条真正的恢复路径。
+    const err = new Error(`HTTP ${response.status}`)
+    err.status = response.status
+    try {
+      const body = await response.json()
+      if (body?.message) err.message = body.message
+    } catch { /* 响应体不是 JSON，保留 "HTTP xxx" */ }
+    throw err
+  }
+  if (!response.body) {
+    throw new Error('响应没有可读的流')
   }
 
   const reader = response.body.getReader()
