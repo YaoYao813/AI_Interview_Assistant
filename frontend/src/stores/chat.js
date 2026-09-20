@@ -2,6 +2,9 @@ import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 const STORAGE_KEY = 'ai_interview_chats'
+// 与 stores/conversation.js 的工厂保持同一上限。整包 JSON.stringify 写 localStorage，
+// 攒多了会撞配额：那时写入开始静默失败，用户看着还能聊，刷新后新消息全没了。
+const MAX_CONVERSATIONS = 20
 
 function loadFromStorage() {
   try {
@@ -70,6 +73,9 @@ export const useChatStore = defineStore('chat', () => {
       updatedAt: now,
     }
     conversations.value.unshift(conv)
+    if (conversations.value.length > MAX_CONVERSATIONS) {
+      conversations.value.splice(MAX_CONVERSATIONS)
+    }
     activeId.value = conv.id
     flushPersist()
     return conv
