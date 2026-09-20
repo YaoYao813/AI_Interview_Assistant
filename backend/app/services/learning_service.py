@@ -53,6 +53,10 @@ class LearningService:
 
     def __init__(self, cache: CacheRepository | None = None):
         self.llm = LLMService()
+        # cache 由 deps.get_learning_svc 在每个请求上赋值，不作为构造参数固定下来：
+        # 单例存在的理由只是复用构造昂贵的 LLMService，若把 cache 冻在首次构造时，
+        # 任何在请求之前碰到单例的代码（测试、脚本、以后新增的调用点）都会让缓存
+        # 静默失效 —— 不报错、只是永远不命中，这类问题很难被发现。
         self.cache = cache
 
     async def generate_roadmap(
@@ -129,16 +133,11 @@ class LearningService:
 _learning_service_instance: LearningService | None = None
 
 
-def get_learning_service(cache: CacheRepository | None = None) -> LearningService:
-    """获取 LearningService 单例。
-
-    cache 只在首次构造时生效。单例存在的理由是 LLMService 的构造开销
-    （新建 LLMClient + 加载 tiktoken 编码器），而 app.state.cache 在进程生命周期内
-    是同一个对象，因此由哪个请求先触发构造没有区别。
-    """
+def get_learning_service() -> LearningService:
+    """获取 LearningService 单例（只复用 LLMService，缓存由调用方按请求注入）"""
     global _learning_service_instance
     if _learning_service_instance is None:
-        _learning_service_instance = LearningService(cache=cache)
+        _learning_service_instance = LearningService()
     return _learning_service_instance
 
 

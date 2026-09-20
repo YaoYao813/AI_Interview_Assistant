@@ -36,8 +36,15 @@ def get_cache(request: Request) -> CacheRepository:
 
 
 def get_learning_svc(cache: CacheRepository = Depends(get_cache)) -> LearningService:
-    """注入 LearningService（依赖 Redis 缓存路线图生成结果）"""
-    return get_learning_service(cache)
+    """注入 LearningService（依赖 Redis 缓存路线图生成结果）
+
+    cache 挂在单例上而不是构造时传入：单例只为了复用昂贵的 LLMService，
+    若缓存只在首次构造时生效，先碰到单例的代码会让缓存静默失效。
+    app.state.cache 全进程唯一，每次请求重复赋值是幂等的。
+    """
+    svc = get_learning_service()
+    svc.cache = cache
+    return svc
 
 
 def get_interview_svc(cache: CacheRepository = Depends(get_cache)) -> InterviewService:
