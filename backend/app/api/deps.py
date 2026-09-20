@@ -30,14 +30,14 @@ def get_resume_svc() -> ResumeService:
     return get_resume_service()
 
 
-def get_learning_svc() -> LearningService:
-    """注入 LearningService"""
-    return get_learning_service()
-
-
 def get_cache(request: Request) -> CacheRepository:
     """注入 Redis 缓存仓库（挂在 app.state.cache）"""
     return request.app.state.cache
+
+
+def get_learning_svc(cache: CacheRepository = Depends(get_cache)) -> LearningService:
+    """注入 LearningService（依赖 Redis 缓存路线图生成结果）"""
+    return get_learning_service(cache)
 
 
 def get_interview_svc(cache: CacheRepository = Depends(get_cache)) -> InterviewService:
