@@ -26,6 +26,7 @@ class ChromaVectorStore(BaseVectorStore):
         chunks: list[dict],
         document_id: str,
         filename: str,
+        file_size: int | None = None,
     ) -> int:
         if not chunks:
             return 0
@@ -35,16 +36,19 @@ class ChromaVectorStore(BaseVectorStore):
 
         ids = [f"{document_id}_{c['chunk_index']}" for c in chunks]
         created_at = datetime.now(timezone.utc).isoformat()
-        metadatas = [
-            {
+        metadatas = []
+        for c in chunks:
+            meta = {
                 "document_id": document_id,
                 "filename": filename,
                 "chunk_index": c["chunk_index"],
                 "chunk_size": c.get("chunk_size", len(c["content"])),
                 "created_at": created_at,
             }
-            for c in chunks
-        ]
+            # Chroma 的 metadata 不接受 None，缺大小就整个字段不写
+            if file_size is not None:
+                meta["file_size"] = file_size
+            metadatas.append(meta)
 
         self.collection.add(
             ids=ids,
@@ -142,6 +146,7 @@ class ChromaVectorStore(BaseVectorStore):
                     filename=meta.get("filename", ""),
                     chunk_count=0,
                     created_at=meta.get("created_at", ""),
+                    file_size=meta.get("file_size"),
                 )
             doc_map[doc_id].chunk_count += 1
 

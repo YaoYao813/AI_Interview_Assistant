@@ -197,7 +197,7 @@
             <template #default="{ row }">{{ formatOf(row.filename) }}</template>
           </el-table-column>
           <el-table-column label="大小" width="100" align="center">
-            <template #default="{ row }">{{ formatSize(sizeOf(row)) }}</template>
+            <template #default="{ row }">{{ formatSize(row.file_size) }}</template>
           </el-table-column>
           <el-table-column label="上传时间" width="150" align="center">
             <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
@@ -231,7 +231,6 @@ import { uploadDocument, getDocumentList, deleteDocument, getKnowledgeStatistics
 import LineIcon from '@/components/common/LineIcon.vue'
 
 const ALLOWED_EXT = ['.pdf', '.docx', '.doc', '.md', '.txt']
-const SIZE_KEY = 'ai_kb_doc_sizes'
 
 const uploadRef = ref(null)
 const dirInputRef = ref(null)
@@ -247,7 +246,6 @@ const detailOpen = ref(false)
 const docKeyword = ref('')
 const formatFilter = ref('')
 const dragActive = ref(false)
-const sizes = ref(loadSizes())
 
 const pendingCount = computed(() => queue.value.filter(i => i.status !== 'success').length)
 
@@ -262,11 +260,12 @@ const filteredDocuments = computed(() => {
 
 const formatOptions = computed(() => [...new Set(documents.value.map(d => formatOf(d.filename)))])
 
+// 大小来自后端 metadata；⑬ 之前上传的老文档没有这个字段，计为「未记录」
 const knownSizeCount = computed(
-  () => documents.value.filter(d => sizes.value[d.document_id] != null).length
+  () => documents.value.filter(d => d.file_size != null).length
 )
 const totalSize = computed(
-  () => documents.value.reduce((sum, d) => sum + (sizes.value[d.document_id] || 0), 0)
+  () => documents.value.reduce((sum, d) => sum + (d.file_size || 0), 0)
 )
 const totalSizeText = computed(
   () => (knownSizeCount.value ? formatSize(totalSize.value) : '—')
@@ -444,7 +443,6 @@ async function uploadOne(item) {
     fd.append('file', item.raw, item.name)
     const res = await uploadDocument(fd)
     item.status = 'success'
-    saveSize(res?.data?.document_id, item.size)
     return true
   } catch (e) {
     item.status = 'fail'
@@ -502,39 +500,11 @@ async function retryItem(item) {
 async function handleDelete(id) {
   try {
     await deleteDocument(id)
-    dropSize(id)
     ElMessage.success('已删除')
     await refreshAll()
   } catch (e) {
     ElMessage.error(e?.response?.data?.message || '删除失败')
   }
-}
-
-/* ===== 文件大小记录（后端列表接口不含大小，按 document_id 记在本地） ===== */
-
-function loadSizes() {
-  try {
-    return JSON.parse(localStorage.getItem(SIZE_KEY) || '{}') || {}
-  } catch { return {} }
-}
-
-function saveSize(documentId, size) {
-  if (!documentId || !size) return
-  const map = loadSizes()
-  map[documentId] = size
-  localStorage.setItem(SIZE_KEY, JSON.stringify(map))
-  sizes.value = map
-}
-
-function dropSize(documentId) {
-  const map = loadSizes()
-  delete map[documentId]
-  localStorage.setItem(SIZE_KEY, JSON.stringify(map))
-  sizes.value = map
-}
-
-function sizeOf(doc) {
-  return sizes.value[doc.document_id]
 }
 
 /* ===== 展示格式化 ===== */

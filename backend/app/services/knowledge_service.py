@@ -85,11 +85,13 @@ class KnowledgeService:
             if not chunks:
                 raise InvalidFileException("文档解析后内容为空，无法索引")
 
-            # 5. 存入向量库
+            # 5. 存入向量库（文件大小一并写进文档级 metadata）
+            file_size = Path(file_path).stat().st_size
             chunk_count = await self._vector_store.add_documents(
                 chunks=chunks,
                 document_id=document_id,
                 filename=original_filename,
+                file_size=file_size,
             )
 
             return {

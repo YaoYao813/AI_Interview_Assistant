@@ -50,11 +50,14 @@ class DocumentInfo:
         filename: str,
         chunk_count: int,
         created_at: str = "",
+        file_size: int | None = None,
     ):
         self.document_id = document_id
         self.filename = filename
         self.chunk_count = chunk_count
         self.created_at = created_at
+        # 老数据没有这条 metadata，为 None（前端显示「—」而不是 0）
+        self.file_size = file_size
 
     def to_dict(self) -> dict:
         return {
@@ -62,6 +65,7 @@ class DocumentInfo:
             "filename": self.filename,
             "chunk_count": self.chunk_count,
             "created_at": self.created_at,
+            "file_size": self.file_size,
         }
 
 
@@ -76,6 +80,7 @@ class BaseVectorStore(ABC):
         chunks: list[dict],
         document_id: str,
         filename: str,
+        file_size: int | None = None,
     ) -> int:
         """
         将文本块向量化并存储
@@ -84,6 +89,7 @@ class BaseVectorStore(ABC):
             chunks: [{"content": str, "chunk_index": int, ...}, ...]
             document_id: 文档唯一 ID
             filename: 原始文件名
+            file_size: 原始文件字节数，写入文档级 metadata
 
         Returns:
             实际存储的文本块数量
