@@ -162,32 +162,43 @@
           <div class="stat-card">
             <span class="stat-num">{{ loadError ? '—' : totalSizeText }}</span>
             <span class="stat-label">总文件大小</span>
-            <span v-if="!loadError && knownSizeCount < documents.length" class="stat-sub">
-              已记录 {{ knownSizeCount }}/{{ documents.length }} 篇
+            <span
+              v-if="!loadError && stats.sized_document_count < stats.document_count"
+              class="stat-sub"
+            >
+              已记录 {{ stats.sized_document_count }}/{{ stats.document_count }} 篇
             </span>
           </div>
           <div class="stat-card">
-            <span class="stat-num">{{ loadError ? '—' : vectorizedCount }}</span>
+            <!-- 能出现在向量库里就等于已向量化，这个数恒等于文档总数 -->
+            <span class="stat-num">{{ loadError ? '—' : stats.document_count }}</span>
             <span class="stat-label">已向量化</span>
           </div>
         </div>
 
         <div class="detail-toolbar">
           <LineIcon name="search" :size="14" />
-          <input v-model="docKeyword" class="doc-search" type="text" placeholder="按文件名搜索" />
+          <input
+            v-model="docKeyword"
+            class="doc-search"
+            type="text"
+            placeholder="按文件名搜索"
+            @input="onSearchInput"
+          />
           <el-select
             v-model="formatFilter"
             placeholder="全部格式"
             clearable
             size="small"
             style="width: 120px"
+            @change="onFilterChange"
           >
             <el-option v-for="f in formatOptions" :key="f" :label="f" :value="f" />
           </el-select>
         </div>
 
         <el-table
-          :data="filteredDocuments"
+          :data="documents"
           style="width: 100%"
           v-loading="tableLoading"
           :empty-text="loadError ? '加载失败，请重试' : (docKeyword ? '没有匹配的文档' : '暂无文档')"
@@ -219,6 +230,18 @@
             </template>
           </el-table-column>
         </el-table>
+
+        <div v-if="!loadError && total > 0" class="pager">
+          <el-pagination
+            layout="total, sizes, prev, pager, next"
+            :total="total"
+            :current-page="page"
+            :page-size="pageSize"
+            :page-sizes="[10, 20, 50, 100]"
+            @current-change="onPageChange"
+            @size-change="onSizeChange"
+          />
+        </div>
       </template>
     </div>
   </div>
@@ -246,33 +269,21 @@ const detailOpen = ref(false)
 const docKeyword = ref('')
 const formatFilter = ref('')
 const dragActive = ref(false)
+// 分页由服务端负责：documents 只是当前页
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 
 const pendingCount = computed(() => queue.value.filter(i => i.status !== 'success').length)
 
-const filteredDocuments = computed(() => {
-  const kw = docKeyword.value.trim().toLowerCase()
-  return documents.value.filter((d) => {
-      if (kw && !String(d.filename || '').toLowerCase().includes(kw)) return false
-      if (formatFilter.value && formatOf(d.filename) !== formatFilter.value) return false
-      return true
-  })
-})
+// 选项用支持的格式全集，不按当前页的数据推导——否则翻页时选项会跳变
+const formatOptions = ALLOWED_EXT.map(e => e.slice(1).toUpperCase())
 
-const formatOptions = computed(() => [...new Set(documents.value.map(d => formatOf(d.filename)))])
-
-// 大小来自后端 metadata；⑬ 之前上传的老文档没有这个字段，计为「未记录」
-const knownSizeCount = computed(
-  () => documents.value.filter(d => d.file_size != null).length
-)
-const totalSize = computed(
-  () => documents.value.reduce((sum, d) => sum + (d.file_size || 0), 0)
-)
+// 大小来自后端 metadata；⑬ 之前上传的老文档没有这个字段，显示「—」
 const totalSizeText = computed(
-  () => (knownSizeCount.value ? formatSize(totalSize.value) : '—')
+  () => (stats.value.sized_document_count ? formatSize(stats.value.total_size || 0) : '—')
 )
-const vectorizedCount = computed(
-  () => documents.value.filter(d => (d.chunk_count || 0) > 0).length
-)
+// 文档按上传时间倒序，最新的一篇必在第 1 页；closeDetail 会重置到第 1 页
 const lastUpdatedText = computed(() => {
   const list = documents.value.map(d => d.created_at).filter(Boolean).sort()
   return list.length ? formatTime(list[list.length - 1]) : '暂无记录'
@@ -287,8 +298,19 @@ onMounted(() => { refreshAll() })
 async function refreshAll() {
   tableLoading.value = true
   try {
-    const [listRes, statsRes] = await Promise.all([getDocumentList(), getKnowledgeStatistics()])
+    const [listRes, statsRes] = await Promise.all([
+      // 过滤与分页都在服务端：分页前过滤，total 才是「匹配到的总数」，
+      // 否则搜索只会搜当前这一页
+      getDocumentList({
+        limit: pageSize.value,
+        offset: (page.value - 1) * pageSize.value,
+        keyword: docKeyword.value.trim(),
+        format: formatFilter.value,
+      }),
+      getKnowledgeStatistics(),
+    ])
     documents.value = listRes.data?.documents || []
+    total.value = listRes.data?.total || 0
     stats.value = statsRes.data || { document_count: 0, chunk_count: 0 }
     loadError.value = null
   } catch (e) {
@@ -307,6 +329,38 @@ function closeDetail() {
   detailOpen.value = false
   docKeyword.value = ''
   formatFilter.value = ''
+  // 回到第 1 页：主页面的「最近更新」依赖第 1 页的数据
+  page.value = 1
+  refreshAll()
+}
+
+/* ===== 分页与筛选（均走服务端） ===== */
+
+function onPageChange(p) {
+  page.value = p
+  refreshAll()
+}
+
+function onSizeChange(size) {
+  if (size === pageSize.value) return
+  pageSize.value = size
+  page.value = 1
+  refreshAll()
+}
+
+// 输入防抖：逐字符请求会把后端打成筛子
+let searchTimer = null
+function onSearchInput() {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    page.value = 1
+    refreshAll()
+  }, 300)
+}
+
+function onFilterChange() {
+  page.value = 1
+  refreshAll()
 }
 
 /* ===== 队列管理 ===== */
@@ -501,6 +555,8 @@ async function handleDelete(id) {
   try {
     await deleteDocument(id)
     ElMessage.success('已删除')
+    // 删掉本页最后一条时回退一页，否则停在空页
+    if (documents.value.length === 1 && page.value > 1) page.value--
     await refreshAll()
   } catch (e) {
     ElMessage.error(e?.response?.data?.message || '删除失败')
@@ -670,6 +726,8 @@ function statusText(item) {
   display: inline-block; padding: 1px 8px; border-radius: 10px;
   font-size: 12px; border: 1px solid transparent;
 }
+
+.pager { display: flex; justify-content: flex-end; margin-top: 14px; }
 .status-tag.done { color: #8aa88a; border-color: rgba(138, 168, 138, 0.4); }
 .status-tag.none { color: var(--text-secondary); border-color: var(--border-line); }
 </style>

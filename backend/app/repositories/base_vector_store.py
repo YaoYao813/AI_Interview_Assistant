@@ -122,8 +122,11 @@ class BaseVectorStore(ABC):
         ...
 
     @abstractmethod
-    def get_document_count(self) -> int:
-        """获取文档总数"""
+    def get_document_stats(self) -> dict:
+        """文档级汇总：{"document_count", "sized_document_count", "total_size"}
+
+        一次扫描算完，别为「总大小」再扫一遍。
+        """
         ...
 
     @abstractmethod
@@ -132,8 +135,18 @@ class BaseVectorStore(ABC):
         ...
 
     @abstractmethod
-    def list_documents(self, limit: int = 100) -> list[DocumentInfo]:
-        """列出所有文档概要信息（不返回全文）"""
+    def list_documents(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        keyword: str = "",
+        extension: str | None = None,
+    ) -> tuple[list[DocumentInfo], int]:
+        """分页列出文档概要信息，返回 (当前页, 过滤后的总数)
+
+        keyword 按文件名子串匹配，extension 按扩展名（如 ".pdf"）匹配。
+        total 是过滤后的数量，供前端分页器使用。
+        """
         ...
 
     @abstractmethod

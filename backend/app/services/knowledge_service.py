@@ -170,37 +170,52 @@ class KnowledgeService:
 
     # ========== 查询 ==========
 
-    def list_documents(self) -> list[dict]:
+    def list_documents(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        keyword: str = "",
+        extension: str | None = None,
+    ) -> dict:
         """
-        获取文档列表（按上传时间倒序）
+        分页获取文档列表（按上传时间倒序）
 
         Returns:
-            [
-                {
-                    "document_id": str,
-                    "filename": str,
-                    "chunk_count": int,
-                    "created_at": str,
-                },
-                ...
-            ]
+            {
+                "documents": [{document_id, filename, chunk_count, created_at, file_size}, ...],
+                "total": int,     # 过滤后的总数，供分页器使用
+                "limit": int,
+                "offset": int,
+            }
         """
-        documents = self._vector_store.list_documents()
-        return [doc.to_dict() for doc in documents]
+        documents, total = self._vector_store.list_documents(
+            limit=limit, offset=offset, keyword=keyword, extension=extension
+        )
+        return {
+            "documents": [doc.to_dict() for doc in documents],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
 
     def get_statistics(self) -> dict:
         """
-        获取知识库统计信息
+        获取知识库统计信息（全量，不受列表分页/过滤影响）
 
         Returns:
             {
                 "document_count": int,
                 "chunk_count": int,
+                "total_size": int,            # 已记录大小的文档字节数之和
+                "sized_document_count": int,  # 其中有多少篇记录了大小
             }
         """
+        stats = self._vector_store.get_document_stats()
         return {
-            "document_count": self._vector_store.get_document_count(),
+            "document_count": stats["document_count"],
             "chunk_count": self._vector_store.get_chunk_count(),
+            "total_size": stats["total_size"],
+            "sized_document_count": stats["sized_document_count"],
         }
 
     # ========== 私有方法 ==========

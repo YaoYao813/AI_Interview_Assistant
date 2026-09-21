@@ -9,8 +9,8 @@ export function uploadDocument(formData) {
   })
 }
 
-export function getDocumentList() {
-  return request.get('/knowledge/documents')
+export function getDocumentList(params = {}) {
+  return request.get('/knowledge/documents', { params })
 }
 
 export function deleteDocument(id) {
