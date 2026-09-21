@@ -61,7 +61,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { chatQuery, getKnowledgeStatistics } from '@/api/knowledge'
+import { chatQuery, getKnowledgeStatistics, RAG_CHAT_STREAM_URL } from '@/api/knowledge'
 import { useChatStore } from '@/stores/chat'
 import ChatMessage from '@/components/chat/ChatMessage.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
@@ -162,7 +162,7 @@ async function sendStream(question, top_k, threshold, history, convId, controlle
   let aborted = false
 
   try {
-    const response = await fetch('/api/v1/rag/chat/stream', {
+    const response = await fetch(RAG_CHAT_STREAM_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, top_k, threshold, history }),
