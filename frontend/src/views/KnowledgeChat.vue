@@ -62,6 +62,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { chatQuery, getKnowledgeStatistics, RAG_CHAT_STREAM_URL } from '@/api/knowledge'
+import { streamSSE } from '@/utils/sse'
 import { useChatStore } from '@/stores/chat'
 import ChatMessage from '@/components/chat/ChatMessage.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
@@ -160,41 +161,22 @@ async function sendStream(question, top_k, threshold, history, convId, controlle
   chatStore.updateMessage(convId, msgIndex, { isLoading: true })
 
   let aborted = false
+  let lost = false
 
   try {
-    const response = await fetch(RAG_CHAT_STREAM_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, top_k, threshold, history }),
-      signal: controller.signal,
-    })
-    if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
-
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-
-      let sep
-      while ((sep = buffer.indexOf('\n\n')) !== -1) {
-        const rawEvent = buffer.slice(0, sep)
-        buffer = buffer.slice(sep + 2)
-        for (const line of rawEvent.split('\n')) {
-          if (!line.startsWith('data: ')) continue
-          let evt
-          try { evt = JSON.parse(line.slice(6)) } catch { continue }
-          applyStreamEvent(evt, convId, msgIndex)
-        }
-      }
-    }
+    await streamSSE(
+      RAG_CHAT_STREAM_URL,
+      { question, top_k, threshold, history },
+      (evt) => applyStreamEvent(evt, convId, msgIndex),
+      { signal: controller.signal },
+    )
   } catch (e) {
     // 主动中断不是错误，不必上报；其余异常必须留痕，否则问题无从定位
     if (e?.name === 'AbortError') {
       aborted = true
+    } else if (e?.idleTimeout) {
+      lost = true
+      console.warn('[KnowledgeChat] 流式请求空闲超时：', e)
     } else {
       console.warn('[KnowledgeChat] 流式请求中断：', e)
     }
@@ -206,7 +188,11 @@ async function sendStream(question, top_k, threshold, history, convId, controlle
     const msg = chatStore.conversations.find(c => c.id === convId)?.messages[msgIndex]
     const patch = { isLoading: false }
     if (msg && !msg.content) {
-      patch.content = aborted ? '（已停止生成）' : '请求失败，请检查后端服务。'
+      patch.content = aborted
+        ? '（已停止生成）'
+        : lost
+          ? '（连接空闲超时，已中断）'
+          : '请求失败，请检查后端服务。'
     }
     chatStore.updateMessage(convId, msgIndex, patch)
     // 流结束后立刻落盘，不等节流窗口

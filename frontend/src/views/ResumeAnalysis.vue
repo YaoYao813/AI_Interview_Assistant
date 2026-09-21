@@ -337,8 +337,10 @@ async function handleAsk() {
         }
       },
     )
-  } catch {
-    // 保留已生成的内容；完全没拿到内容才给失败兜底
+  } catch (e) {
+    // 保留已生成的内容；完全没拿到内容才给失败兜底。
+    // 主动中断不提示，但空闲超时必须说一声，否则用户只看到回答停在半截
+    if (e?.idleTimeout) ElMessage.warning(e.message)
   }
 
   // 只在流结束后写一次 localStorage，避免逐 token 全量序列化
