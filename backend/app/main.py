@@ -1,8 +1,9 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_v1_router
@@ -12,6 +13,17 @@ from app.repositories.cache import CacheRepository
 from app.repositories.vector_store import VectorStoreRepository
 
 logger = logging.getLogger(__name__)
+
+# 单次依赖探测的超时：探测本身不能成为新的挂起源，
+# Redis 半死不活（连得上但不回包）时必须靠自己超时中断。
+DEPENDENCY_PROBE_TIMEOUT = 2.0
+
+
+def _describe_exception(exc: Exception) -> str:
+    """带上异常类型名：连接类异常的 str() 往往是空串，
+    只写 `error: ` 的探针在排障时等于什么都没说。"""
+    text = str(exc).strip()
+    return f"{type(exc).__name__}: {text}" if text else type(exc).__name__
 
 
 def _ensure_dirs() -> None:
@@ -77,11 +89,41 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
 
     @app.get("/health", tags=["系统"])
-    async def health_check():
+    async def health_check(response: Response):
+        """readiness 探针：真探依赖，任一不可用即 503。
+
+        和 liveness 的区别：liveness 只问「进程还活着吗」，所以无条件 ok；
+        readiness 问「现在能接流量吗」——依赖挂了就不能报 ok，
+        否则编排器会继续把请求打到一个必然 500 的实例上。
+        注意健康时返回 200 但 body 里也有 dependencies，排查时一眼能看出哪个挂了。
+        """
+        dependencies: dict[str, str] = {}
+
+        try:
+            await asyncio.wait_for(
+                app.state.cache.ping(), timeout=DEPENDENCY_PROBE_TIMEOUT
+            )
+            dependencies["redis"] = "ok"
+        except Exception as exc:
+            logger.warning("健康检查：Redis 不可用: %s", exc)
+            dependencies["redis"] = f"error: {_describe_exception(exc)}"
+
+        try:
+            app.state.vector_store.health_check()
+            dependencies["vector_store"] = "ok"
+        except Exception as exc:
+            logger.warning("健康检查：向量库不可用: %s", exc)
+            dependencies["vector_store"] = f"error: {_describe_exception(exc)}"
+
+        healthy = all(v == "ok" for v in dependencies.values())
+        if not healthy:
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
         return {
-            "status": "ok",
+            "status": "ok" if healthy else "degraded",
             "service": settings.PROJECT_NAME,
             "version": settings.VERSION,
+            "dependencies": dependencies,
         }
 
     return app

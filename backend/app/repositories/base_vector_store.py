@@ -132,5 +132,5 @@ class BaseVectorStore(ABC):
 
     @abstractmethod
     def health_check(self) -> dict:
-        """健康检查"""
+        """健康检查（应保持轻量：会被高频探测调用，别做全量扫描）"""
         ...

@@ -152,8 +152,13 @@ class ChromaVectorStore(BaseVectorStore):
     # ===== 健康检查 =====
 
     def health_check(self) -> dict:
+        """轻量探针，供 /health 这类高频调用使用。
+
+        刻意只用 count()，不调 get_document_count()——后者是
+        `collection.get(include=["metadatas"])` 的全量扫描，
+        把一个每秒可能被探测多次的接口变成反复全表拉取。
+        """
         return {
             "status": "ok",
-            "document_count": self.get_document_count(),
             "chunk_count": self.get_chunk_count(),
         }

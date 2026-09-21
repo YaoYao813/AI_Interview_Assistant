@@ -13,3 +13,7 @@ class CacheRepository:
 
     async def delete(self, key: str):
         await self.redis.delete(key)
+
+    async def ping(self) -> bool:
+        """健康探针：Redis 可达返回 True，不可达则抛异常（交给调用方判定）"""
+        return await self.redis.ping()
