@@ -186,23 +186,6 @@ class KnowledgeService:
         documents = self._vector_store.list_documents()
         return [doc.to_dict() for doc in documents]
 
-    def get_document_detail(self, document_id: str) -> dict:
-        """
-        获取单个文档详情
-
-        当前返回文档概要信息。
-        未来可扩展：返回文档中的示例文本块（用于预览）
-
-        Raises:
-            NotFoundException: 文档不存在
-        """
-        documents = self._vector_store.list_documents()
-        for doc in documents:
-            if doc.document_id == document_id:
-                return doc.to_dict()
-
-        raise NotFoundException(f"文档不存在: {document_id}")
-
     def get_statistics(self) -> dict:
         """
         获取知识库统计信息

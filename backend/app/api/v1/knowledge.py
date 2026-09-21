@@ -32,15 +32,6 @@ async def list_documents(
     })
 
 
-@router.get("/documents/{document_id}", response_model=ApiResponse)
-async def get_document_detail(
-    document_id: str,
-    knowledge_svc: KnowledgeService = Depends(get_knowledge_svc),
-):
-    result = knowledge_svc.get_document_detail(document_id)
-    return ApiResponse(data=result)
-
-
 @router.delete("/documents/{document_id}", response_model=ApiResponse)
 async def delete_document(
     document_id: str,

@@ -13,10 +13,6 @@ export function getDocumentList() {
   return request.get('/knowledge/documents')
 }
 
-export function getDocumentDetail(id) {
-  return request.get(`/knowledge/documents/${id}`)
-}
-
 export function deleteDocument(id) {
   return request.delete(`/knowledge/documents/${id}`)
 }
