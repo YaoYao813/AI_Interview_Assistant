@@ -1,7 +1,10 @@
-"""检索层评测：只测「该被找到的块有没有被找出来」+ 1.2 的拒答判定，零 LLM 调用。
+"""检索层评测：只测「该被找到的块有没有被找出来」+ 1.2 的拒答判定 + 1.4 的查询改写，零 LLM 调用。
 
 两个指标族别混：§4.2/§4.3 是分数轴（能不能分开正负样本），§4.4 是内容轴（1.2 的免费规则）。
 
+1.4 的接法：带 history 的题在 questions.json 里有冻结的 `rewrite` 字段（由生产
+`_rewrite_query` 跑一次得来），检索用【改写后的问句】，而 1.2 的 grounding 仍用【原始问句】
+——这句话本身是 1.4 的设计决定，不是实现细节。冻结值让评测保持零 LLM、确定性、免费。
 
 用法（cwd 必须是 backend/，CHROMA_PERSIST_DIR 是相对路径）：
     PYTHONIOENCODING=utf-8 python -m eval.run_eval
@@ -135,6 +138,7 @@ def judge(case: dict, hits: list[DocumentChunk]) -> dict:
         "id": case["id"],
         "stratum": case["stratum"],
         "question": case["question"],
+        "retrieval_query": case.get("rewrite") or case["question"],
         "expected": expected,
         "match": match_mode,
         "refuse": refuse,
@@ -269,6 +273,8 @@ def render(judged: list[dict], by_stratum: dict, by_threshold: dict, grounding: 
     for j in judged:
         w("")
         w(f"[{j['id']}] {j['stratum']}  {j['question']}")
+        if j.get("retrieval_query") and j["retrieval_query"] != j["question"]:
+            w(f"      ↳ 1.4 改写后检索: {j['retrieval_query']}")
         if j["refuse"]:
             w(f"      期望: <应当拒答>")
         else:
@@ -355,8 +361,11 @@ async def main() -> None:
 
     print(f"=== 检索层评测：{len(cases)} 条题，候选池 top_k={TOP_K_POOL} ===")
     print(f"    语料快照核对通过：{actual} chunk")
+    n_rewritten = sum(1 for c in cases if c.get("rewrite"))
+    print(f"    1.4 冻结改写：{n_rewritten} 条用改写后问句检索（其余用原问题）")
 
-    hits_per_question = await retrieve_all([c["question"] for c in cases])
+    # 1.4：带冻结 rewrite 的题用改写后的问句检索；1.2 的 grounding 仍在 judge() 里用原问题
+    hits_per_question = await retrieve_all([c.get("rewrite") or c["question"] for c in cases])
     judged = [judge(c, h) for c, h in zip(cases, hits_per_question)]
 
     by_stratum = aggregate(judged)
@@ -367,7 +376,7 @@ async def main() -> None:
 
     payload = {
         "meta": {
-            "date": "2026-09-28",
+            "date": "2026-09-29",
             "top_k_pool": TOP_K_POOL,
             "prod_top_k": PROD_TOP_K,
             "thresholds": THRESHOLDS,
@@ -375,13 +384,15 @@ async def main() -> None:
             "question_count": len(cases),
             "questions_version": test_set["meta"]["version"],
             "grounding_rule": "RETRIEVAL_TERM_GROUNDING: 问题里 >=3 字符的英文标识符必须出现在前 top_k 块里",
+            "rewrite_rule": "RETRIEVAL_QUERY_REWRITE: 带 history 的题用 questions.json 里冻结的 rewrite 检索；grounding 仍用原始 question",
+            "rewritten_cases": [c["id"] for c in cases if c.get("rewrite")],
         },
         "per_question": judged,          # 形状见 RUN_EVAL_HINTS.md §6
         "by_stratum": by_stratum,
         "by_threshold": by_threshold,
         "by_grounding": grounding,
     }
-    out = Path(__file__).parent / "baseline_v3.json"
+    out = Path(__file__).parent / "baseline_v4.json"
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n已写入 {out}")
 

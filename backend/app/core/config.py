@@ -36,6 +36,15 @@ class Settings(BaseSettings):
     # 留给 2.5 稀疏检索（BM25 天然覆盖术语）。False = 退回「只有 0 命中才拒答」。
     RETRIEVAL_TERM_GROUNDING: bool = True
 
+    # 查询改写（阶段 1.4）
+    # history 非空 且 问句含指代词（它/那/上面/前面）时，先让 LLM 把追问改写成可独立检索的
+    # 完整问句，再拿去 embed —— 只改「取回什么」，不改「问模型什么」（prompt 里仍是原始 question）。
+    # 拒答判定（1.2）也仍用原始 question：改写会往问句里补标识符，用它判会单调变严；
+    # 且改写出错时不该连累拒答。False = 完全退回「直接检索原始问题」。
+    # 实测（7 条多轮题）：multi_turn 4/4 MISS → 4/4 命中；multi_turn_cued 的 C03 排名 1→5
+    # （仍在 top_k=5 内，生产口径不变）——该层本就是为 1.4 建的回归护栏，这是已知代价。
+    RETRIEVAL_QUERY_REWRITE: bool = False
+
     # File upload
     UPLOAD_DIR: str = "./data/documents"
     ALLOWED_EXTENSIONS: list[str] = [".pdf", ".docx", ".doc", ".md", ".txt"]

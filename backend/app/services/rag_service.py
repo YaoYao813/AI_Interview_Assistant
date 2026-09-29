@@ -42,6 +42,26 @@ RAG_SYSTEM_PROMPT = """你是一个专业的 AI 面试辅导助手。
 ## 回答"""
 
 
+# ========== 查询改写（阶段 1.4）==========
+
+# 指代词表：命中即认为实体被替代掉了、需要拿历史补全。
+# 刻意不含「该/此」——它们是普通中文高频词（该如何 / 因此），而生产里第 2 轮往后
+# history 恒非空，会把「那 HashMap 的扩容机制是什么？」这类自足问句也卷进改写。
+ANAPHORA_CUES = ("它", "那", "上面", "前面")
+
+QUERY_REWRITE_PROMPT = """你是查询改写专家。把用户发来的追问改写成一句可以脱离对话、独立检索的完整问句。
+
+规则：
+1. 把 它/那/上面/前面 这类指代，换成下面【最近对话】里出现过的具体实体或概念
+2. 只输出改写后的这一句问句本身 —— 不要解释、不要引号、不要"改写后："之类的前缀
+3. 如果问题本身已经完整，原样返回，不要做任何润色
+4. 英文标识符（类名/参数名/字段名）原样保留，不要翻译、不要展开缩写、不要改大小写
+5. 指代到多个实体时（如"它俩"），把每个实体都写进去
+
+最近对话：
+{history}"""
+
+
 class RAGService:
     """
     RAG 问答服务
@@ -105,8 +125,9 @@ class RAGService:
                 "token_count": 0,
             }
 
-        # 2. 向量检索（内部 embedding）
-        query_embedding = await self._embedding.embed_query(question) # 将问题转为向量
+        # 2. 查询改写 + 向量检索（内部 embedding）
+        retrieval_query = await self._rewrite_query(question, history)  # 只影响"取回什么"
+        query_embedding = await self._embedding.embed_query(retrieval_query) # 将问题转为向量
         result = self._vector_store.search( # 检索向量
             query_embedding=query_embedding,
             top_k=top_k,
@@ -169,8 +190,9 @@ class RAGService:
             data: {"type": "done"}
 
         """
-        # 1. 向量检索
-        query_embedding = await self._embedding.embed_query(question)
+        # 1. 查询改写 + 向量检索（改写只影响"取回什么"）
+        retrieval_query = await self._rewrite_query(question, history)
+        query_embedding = await self._embedding.embed_query(retrieval_query)
         result = self._vector_store.search(
             query_embedding=query_embedding,
             top_k=top_k,
@@ -208,6 +230,50 @@ class RAGService:
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     # ========== 私有方法 ==========
+
+    async def _rewrite_query(self, question: str, history: list[dict] | None) -> str:
+        """把指代追问改写成可独立检索的完整问句 —— 1.4 的【唯一】函数边界。
+
+        返回原问题表示「没改」（未开启 / 未触发 / 调用失败 / 结果不可用），调用方无需分支。
+
+        为什么只改这一处：改写只决定「取回什么」，不改「问模型什么」。拒答判定
+        （1.2 的 is_grounded）与 prompt 里的 {question} 都仍用原始问句——改写会往问句里
+        补标识符，拿它去判会单调变严；且改写出错时不该把自己变成一次拒答。
+        """
+        if not settings.RETRIEVAL_QUERY_REWRITE or not history:
+            return question
+        if not any(cue in question for cue in ANAPHORA_CUES):
+            return question
+
+        # 掐掉可能的重复：生产里前端是「先 addMessage('user') 再取 history」，history
+        # 末条就等于当前问题；评测 fixture 里则不含它。两种形状都吃。
+        recent = [m for m in history if (m.get("content") or "").strip()]
+        if recent and recent[-1]["content"].strip() == question.strip():
+            recent.pop()
+        if not recent:
+            return question
+
+        # 只喂最近 2 轮；每条截 500 字（助手回答可能很长，实体一般在开头）
+        lines = [
+            f"{'用户' if m.get('role') == 'user' else '助手'}: {(m.get('content') or '')[:500]}"
+            for m in recent[-4:]
+        ]
+
+        try:
+            rewritten = await self._llm.chat(
+                system_prompt=QUERY_REWRITE_PROMPT.format(history="\n".join(lines)),
+                user_message=question,
+                temperature=0.0,  # 这是转换不是生成，要可复现
+                max_tokens=128,
+            )
+        except Exception:
+            logger.warning("查询改写失败，回退原问题", exc_info=True)
+            return question
+
+        rewritten = (rewritten or "").strip().strip('"').strip()
+        if not rewritten or len(rewritten) > 200:
+            return question  # 空 / 像解释而不像问句 → 退化成「不改写」
+        return rewritten
 
     @staticmethod
     def _group_sources(chunks: list[DocumentChunk]) -> list[dict]:

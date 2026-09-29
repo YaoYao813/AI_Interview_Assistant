@@ -12,7 +12,8 @@
       "expect.substrings": "可选。块级复核用的关键串（如 sizeCtl、TREEIFY_THRESHOLD），跨重新切分稳定。留空表示只做文档级判定",
       "refuse": "true 表示这条应当拒答（语料里确实没有答案）",
       "verified": "true = 我已经确认过语料的真实情况（正向的确认文档确实答得了；拒答的确认 grep 0 篇）",
-      "why": "这条为什么算有代表性 / 为什么这个答案算对 / 为什么它有区分度"
+      "why": "这条为什么算有代表性 / 为什么这个答案算对 / 为什么它有区分度",
+      "rewrite": "只有带 history 的题有。1.4 改写后的检索问句，由生产 _rewrite_query 冻结而来（不是每次重跑，否则评测本身不可复现）。run_eval 拿它去检索；grounding 与 prompt 仍用 question"
     },
     "标注纪律": [
       "每条必须能回答「命中哪一块算对」。说不清就删掉——不可判定的问题就是噪声。",
@@ -48,9 +49,9 @@
   },
 
   "meta": {
-    "version": 4,
+    "version": 5,
     "created": "2026-09-22",
-    "updated": "2026-09-28",
+    "updated": "2026-09-29",
     "corpus_snapshot": {
       "document_count": 229,
       "chunk_count": 2393,
@@ -212,6 +213,7 @@
         { "role": "user", "content": "ConcurrentHashMap 1.8 的 size 计数是怎么实现的？" },
         { "role": "assistant", "content": "（冻结的固定桩文本，不是模型实时输出）1.8 里用 baseCount + CounterCell 数组做分段计数，扩容和初始化状态由 sizeCtl 字段管理。" }
       ],
+      "rewrite": "ConcurrentHashMap 1.7 的 size 计数是怎么实现的？",
       "expect": { "match": "any", "filenames": ["concurrent-hash-map-source-code.md"], "substrings": ["1.7"] },
       "refuse": false,
       "verified": true,
@@ -225,6 +227,7 @@
         { "role": "user", "content": "ArrayList 的扩容机制是怎样的？" },
         { "role": "assistant", "content": "（冻结的固定桩文本）默认容量 10，扩容时 grow() 里用 newCapacity = oldCapacity + (oldCapacity >> 1)，也就是 1.5 倍，然后靠 Arrays.copyOf 把旧数组搬过去。" }
       ],
+      "rewrite": "ArrayList 的默认初始容量是多少？",
       "expect": { "match": "any", "filenames": ["arraylist-source-code.md"], "substrings": ["10"] },
       "refuse": false,
       "verified": true,
@@ -238,6 +241,7 @@
         { "role": "user", "content": "MySQL 的 InnoDB 为什么用 B+ 树做索引？" },
         { "role": "assistant", "content": "（冻结的固定桩文本）B+ 树矮胖、叶子节点成链，能把磁盘 IO 次数压到 2~3 次，而且支持范围查询。" }
       ],
+      "rewrite": "InnoDB 的 B+ 树索引在什么情况下会失效？",
       "expect": { "match": "any", "filenames": ["mysql-index-invalidation.md"], "substrings": [] },
       "refuse": false,
       "verified": true,
@@ -251,6 +255,7 @@
         { "role": "user", "content": "Zookeeper 是怎么实现分布式锁的？" },
         { "role": "assistant", "content": "（冻结的固定桩文本）靠临时顺序节点 + watcher：客户端在锁节点下建临时顺序子节点，序号最小的拿到锁，其余监听前一个节点。" }
       ],
+      "rewrite": "Zookeeper 是怎么把 Leader 选出来的？",
       "expect": { "match": "any", "filenames": ["12.2.5 zk是如何选举Leader的？.md"], "substrings": [] },
       "refuse": false,
       "verified": true,
@@ -264,6 +269,7 @@
         { "role": "user", "content": "AQS 的独占模式和共享模式有什么区别？" },
         { "role": "assistant", "content": "（冻结的固定桩文本，不是模型实时输出）独占模式同一时刻只允许一个线程持有同步状态，共享模式允许多个线程同时获取；落到模板方法上就是 tryAcquire/tryRelease 与 tryAcquireShared/tryReleaseShared 两套。" }
       ],
+      "rewrite": "AQS 的独占模式和共享模式分别用在哪些类里？",
       "expect": { "match": "any", "filenames": ["aqs.md"], "substrings": [] },
       "refuse": false,
       "verified": true,
@@ -277,6 +283,7 @@
         { "role": "user", "content": "CopyOnWriteArrayList 适合什么场景？" },
         { "role": "assistant", "content": "（冻结的固定桩文本，不是模型实时输出）适合读多写少的并发场景，底层靠写时复制来保证线程安全。" }
       ],
+      "rewrite": "CopyOnWriteArrayList 读取的时候要加锁吗？",
       "expect": { "match": "any", "filenames": ["copyonwritearraylist-source-code.md"], "substrings": [] },
       "refuse": false,
       "verified": true,
@@ -290,6 +297,7 @@
         { "role": "user", "content": "ThreadLocal 是什么？会导致内存泄漏吗？" },
         { "role": "assistant", "content": "（冻结的固定桩文本，不是模型实时输出）它给每个线程提供独立的变量副本，线程之间互不干扰；Entry 的 key 是弱引用，用完不 remove 会有泄漏风险。" }
       ],
+      "rewrite": "ThreadLocal 内部是用什么结构存储数据的？",
       "expect": { "match": "any", "filenames": ["threadlocal.md"], "substrings": [] },
       "refuse": false,
       "verified": true,
