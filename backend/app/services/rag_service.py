@@ -204,6 +204,58 @@ class RAGService:
 
     # ========== 私有方法 ==========
 
+    @staticmethod
+    def _group_sources(chunks: list[DocumentChunk]) -> list[dict]:
+        """把检索结果按【文档】聚合成引用列表 —— 引用编号的唯一来源。
+
+        为什么要有这个函数：编号必须只有一处产出。此前 `_build_context` 按块
+        编号、`_format_sources` 也按块编号但会跳过重复项，两边编号就对不上，
+        模型会引用一个前端根本没展示的编号（引用不可追溯）。现在二者都只
+        消费本函数的返回值，编号结构上不可能分叉。
+
+        去重键是 `document_id` 而非「内容前 150 字符」：同一文档的不同块正文
+        不同，用内容前缀去重挡不住「同一文档占满多个引用位」；反过来，开头
+        相同的不同文档又会被误并成一条。
+
+        Returns:
+            [{"index": 1, "document": str, "content": str, "similarity": float}, ...]
+            index 从 1 连续编号，与 `_format_sources` 的 `index` 逐位一致。
+        """
+        grouped: dict[str, dict] = {}
+        order: list[str] = []
+
+        for chunk in chunks:
+            doc_id = chunk.metadata.get("document_id") or chunk.metadata.get("filename", "")
+            similarity = chunk.similarity or 0.0
+
+            entry = grouped.get(doc_id)
+            if entry is None:
+                entry = {
+                    "document": chunk.metadata.get("filename", "未知文档"),
+                    "contents": [],
+                    "seen": set(),
+                    "similarity": similarity,
+                }
+                grouped[doc_id] = entry
+                order.append(doc_id)
+
+            # 同一文档内完全相同的块只收一次（切分重叠理论上不该产出，但短块重复很便宜地挡掉）
+            content = chunk.content or ""
+            if content not in entry["seen"]:
+                entry["seen"].add(content)
+                entry["contents"].append(content)
+            entry["similarity"] = max(entry["similarity"], similarity)
+
+        return [
+            {
+                "index": i,
+                "document": grouped[doc_id]["document"],
+                "content": "\n---\n".join(grouped[doc_id]["contents"]),
+                "similarity": grouped[doc_id]["similarity"],
+            }
+            for i, doc_id in enumerate(order, start=1)
+        ]
+
     def _build_context(self, chunks: list[DocumentChunk], history: list[dict] | None = None) -> str:
         """拼接检索结果 + 历史对话为上下文"""
         parts: list[str] = []
@@ -216,20 +268,18 @@ class RAGService:
                 parts.append(f"**{role}**: {msg.get('content', '')}")
             parts.append("")
 
-        # 参考文档
-        for i, chunk in enumerate(chunks, start=1):
-            filename = chunk.metadata.get("filename", "未知文档")
-            similarity = chunk.similarity or 0
+        # 参考文档（按文档聚合，编号与前端引用来源一致）
+        for src in self._group_sources(chunks):
             part = (
-                f"[来源{i}] {chunk.content}\n"
-                f"（文档：{filename}，相似度：{similarity:.2f}）"
+                f"[{src['index']}] {src['content']}\n"
+                f"（文档：{src['document']}，相似度：{src['similarity']:.2f}）"
             )
             parts.append(part)
         return "\n\n".join(parts)
 
     def _format_sources(self, chunks: list[DocumentChunk]) -> list[dict]:
         """
-        格式化来源信息（给前端展示）+ 去重
+        格式化来源信息（给前端展示）。一篇文档一条，编号取自 `_group_sources`。
 
         Returns:
             [
@@ -238,22 +288,14 @@ class RAGService:
             ]
         """
         sources: list[dict] = []
-        seen: set[str] = set()
-
-        for i, chunk in enumerate(chunks, start=1):
-            preview = chunk.content[:150]
-
-            if preview in seen:
-                continue
-            seen.add(preview)
-
+        for src in self._group_sources(chunks):
+            content = src["content"]
             sources.append({
-                "index": i,
-                "document": chunk.metadata.get("filename", "未知文档"),
-                "content": preview + ("..." if len(chunk.content) > 150 else ""),
-                "similarity": chunk.similarity,
+                "index": src["index"],
+                "document": src["document"],
+                "content": content[:150] + ("..." if len(content) > 150 else ""),
+                "similarity": src["similarity"],
             })
-
         return sources
 
 
