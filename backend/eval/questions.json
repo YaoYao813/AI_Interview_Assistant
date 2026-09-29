@@ -1,0 +1,423 @@
+{
+  "_schema": {
+    "用途": "阶段 1.3 的检索评测集。只测「检索层」——该被找到的块有没有被找出来，不测回答质量。",
+    "为什么只测检索层": "判据是文档/块 id，确定性、零 LLM 调用、免费、秒级；模型换版本历史数字也照样可比。回答质量要人工或 LLM 裁判，噪声大且随模型漂移，留到最后做少量人工抽查。",
+    "字段说明": {
+      "id": "A/B/C/D/E 前缀 + 两位序号。前缀即 stratum。",
+      "stratum": "single_doc(单文档事实) / term(术语精确匹配) / multi_doc(跨文档) / multi_turn(纯指代多轮追问) / multi_turn_cued(带实义词残留的多轮追问) / refuse(应当拒答)",
+      "question": "用户问题原文",
+      "history": "只有 multi_turn 用。冻结的固定文本，不是每次重跑模型生成——否则评测本身不可复现",
+      "expect.match": "any=命中任一 filename 即可（默认）；all=必须全部命中（multi_doc 用）",
+      "expect.filenames": "主判据。标【文件名】不标 chunk_id——chunk_id 在重建索引（阶段 2.1）后全部失效，评测集当场作废",
+      "expect.substrings": "可选。块级复核用的关键串（如 sizeCtl、TREEIFY_THRESHOLD），跨重新切分稳定。留空表示只做文档级判定",
+      "refuse": "true 表示这条应当拒答（语料里确实没有答案）",
+      "verified": "true = 我已经确认过语料的真实情况（正向的确认文档确实答得了；拒答的确认 grep 0 篇）",
+      "why": "这条为什么算有代表性 / 为什么这个答案算对 / 为什么它有区分度"
+    },
+    "标注纪律": [
+      "每条必须能回答「命中哪一块算对」。说不清就删掉——不可判定的问题就是噪声。",
+      "丢弃没有区分度的问题：「什么是 HashMap」在几十个块里都有，recall 恒为 1，测不出任何优化。要问具体的。",
+      "按来源配额，别让单一来源淹没评测集：javaguide 占 93.7% 的 chunk，如果 25 条里 23 条问它，你测的是 JavaGuide 不是你的系统。",
+      "n=31 且命中是二值的 → 差 2 条以内不可区分。所以报告必须带逐条明细表，不能只给聚合数字。",
+      "multi_doc 用 match=all 之前，必须验证「单篇不足」：如果一篇就能把整题答完，那篇单独被检索到是正确且充分的，match=all 只会把它判成假负样本。2026-09-27 实测两个反面例子：①「ArrayList vs CopyOnWriteArrayList」——COW 那篇连替代方案（Vector/Collections.synchronizedList）和 3 个取舍都讲了，单篇自足；②「索引失效」那对——mysql-index-invalidation.md 第 142 行自己就有 H3「隐式类型转换」，也在自足范围内。正例是 D01/D02/D03：每篇 grep 过、确认不重叠才敢用 match=all。",
+      "多轮追问必须分清「纯指代」和「残落实义词」两类，并且分成两个 stratum。2026-09-28 实测：写的时候以为 C01–C04 都是纯指代，跑 baseline 才发现只有 C01（「那 1.7 里是怎么做的？」，零实体）真 MISS，C02/C03/C04 分别靠残留的「默认初始容量」「失效」「Leader」命中在 rank 3/1/1。含义完全不同——纯指代题不 rewrite 必然 MISS，是 1.4 的判据；带残留的题不 rewrite 也本该命中，是 1.4 的回归护栏（改写把实体带错时它们会掉）。混在一个 stratum 里算 recall，护栏的中标会把判据的 0 分稀释掉，指标失去意义。"
+    ],
+    "拒答题的构造方法": {
+      "原则": "不要凭空想象。每条都必须先 grep 确认语料里真的没有——否则会造出「其实有答案、只是检索不到」的假负样本，把拒答准确率算错，而且错得毫无痕迹。",
+      "① 已于 2026-09-22 grep 确认为 0 篇的话题": ["Kubernetes", "领域驱动/DDD", "HBase", "ClickHouse", "雪花算法", "Jenkins", "Grafana", "Hystrix", "RedLock/红锁", "Gossip"],
+      "⚠️ 反例（凭印象会误判为超纲、实际语料里有）": {
+        "Kafka": "10 篇", "Netty": "13 篇", "消息队列": "24 篇", "Elasticsearch": "9 篇",
+        "Dubbo": "6 篇", "分库分表": "7 篇", "灰度发布": "8 篇", "虚拟线程": "8 篇"
+      },
+      "⚠️ 「唯一」这个词要 grep 过才敢写（2026-09-27 实测反例）": {
+        "DelayQueue": "不是 1 篇而是 3 篇（delayqueue-source-code.md / java-collection-questions-01.md / arrayblockingqueue-source-code.md）；README.md 被 SKIP_NAMES 排除不算",
+        "innodb_flush_log_at_trx_commit": "2 篇（mysql-logs.md / mysql-backup-and-restore.md）",
+        "零拷贝": "1 篇 ✓（nio-basis.md）",
+        "sizeCtl": "1 篇 ✓（concurrent-hash-map-source-code.md）",
+        "ReadView": "1 篇 ✓（innodb-implementation-of-mvcc.md）",
+        "第 K 小": "1 篇 ✓（01.阿里篇/1.1.3）",
+        "逆序输出": "1 篇入库 ✓（01.阿里篇/1.1.1；另一处在 2023adding.md，已被 SKIP_NAMES 排除）"
+      },
+      "三类负样本（按价值排序）": [
+        "① 语料确实没有的领域：最干净，见上面已确认列表，从这里面取。",
+        "② 同领域但语料未覆盖的具体点：最有价值也最难。语料有 RAG/Redis 文档但不含你问的那个具体点——阶段 0 那条 0.5597 命中就是这类。它最能暴露「阈值没有区分力」。E08(RedLock) 就是这一类的样本。",
+        "③ 近义陷阱：用词接近但语义不同。"
+      ],
+      "观察项（不计分）": "部分可答——问题一半在语料里一半不在。现在的代码是二值的（有命中就答），这类会暴露它。但「正确答案」本身有争议，先只记录给人看，不纳入分母。"
+    }
+  },
+
+  "meta": {
+    "version": 4,
+    "created": "2026-09-22",
+    "updated": "2026-09-28",
+    "corpus_snapshot": {
+      "document_count": 229,
+      "chunk_count": 2393,
+      "chunk_size": 1000,
+      "chunk_overlap": 200,
+      "embedding_model": "BAAI/bge-m3",
+      "note": "语料一变（重建/重新切分），这个快照就要更新，且所有历史数字需要重测"
+    },
+    "strata_plan": {
+      "single_doc": { "target": "6-8", "actual": 8, "serves": "1.1 阈值后置过滤" },
+      "term": { "target": "4-6", "actual": 5, "serves": "2.5 混合检索的判据（稀疏检索强项）" },
+      "multi_doc": { "target": "3-4", "actual": 3, "serves": "1.1 扩候选池" },
+      "multi_turn": { "target": "4-5", "actual": 4, "serves": "1.4 history-aware query 改写（纯指代：C01/C05/C06/C07）" },
+      "multi_turn_cued": { "target": "2-3", "actual": 3, "serves": "1.4 的回归护栏（残落实义词，baseline 本就该命中）" },
+      "refuse": { "target": "6-8", "actual": 8, "serves": "1.2 拒答语义" }
+    },
+    "total": 31,
+    "unverified_fields_note": "带 verified:false 的条目是草稿，需要确认语料是否真的答得了；确认后改成 true。2026-09-27：D01 原题（ArrayList vs CopyOnWriteArrayList）经读原文判定「单篇自足、match=all 立不住」，已整条换成线程池那一对并 verified:true。2026-09-28（version 4）：C02/C03/C04 移入新拆出的 multi_turn_cued，multi_turn 补 C05/C06/C07 三条纯指代题。当前 31 条全部 verified。"
+  },
+
+  "questions": [
+    {
+      "id": "A01",
+      "stratum": "single_doc",
+      "question": "ArrayList 的扩容机制是怎样的？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["arraylist-source-code.md"], "substrings": [] },
+      "refuse": false,
+      "verified": true,
+      "why": "该文件有专门的 H2「ArrayList 扩容机制分析」，答案落点明确。基线能力，改动前后这条应当稳定命中。"
+    },
+    {
+      "id": "A02",
+      "stratum": "single_doc",
+      "question": "HashMap 的底层数据结构在 JDK1.8 前后有什么变化？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["hashmap-source-code.md"], "substrings": ["红黑树"] },
+      "refuse": false,
+      "verified": true,
+      "why": "该文件有 H2「底层数据结构分析」下分 JDK1.8 之前 / 之后两节。问「变化」而不是「是什么」，是为了避开「什么是 HashMap」那种到处都有的无区分度问法。"
+    },
+    {
+      "id": "A03",
+      "stratum": "single_doc",
+      "question": "BigDecimal 为什么不能直接用 equals 做等值比较？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["bigdecimal.md"], "substrings": ["compareTo"] },
+      "refuse": false,
+      "verified": true,
+      "why": "该文件有独立的 H2「BigDecimal 等值比较问题」，答案唯一落点。⚠️ grep「等值比较|compareTo」有 9 篇命中，所以文档级判据本身不唯一——但这段解释只在这篇。若评测显示命中别的文件，那恰恰是要优化的问题（块级细粒度不足）。"
+    },
+    {
+      "id": "A04",
+      "stratum": "single_doc",
+      "question": "为什么说 Java 只有值传递，没有引用传递？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["why-there-only-value-passing-in-java.md"], "substrings": ["值传递"] },
+      "refuse": false,
+      "verified": true,
+      "why": "整篇文件的标题就是「为什么 Java 只有值传递」，专文专用。题目和文件名高度词面重合，是稠密+稀疏都该命中的基准题。"
+    },
+    {
+      "id": "A05",
+      "stratum": "single_doc",
+      "question": "JVM 堆内存的分配和回收原则是什么？对象优先分配在哪里？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["jvm-garbage-collection.md"], "substrings": ["Eden"] },
+      "refuse": false,
+      "verified": true,
+      "why": "该文件有 H2「内存分配和回收原则」，下分「对象优先在 Eden 区分配」「大对象直接进入老年代」「长期存活的对象将进入老年代」三节。Eden 是块级可复核的关键串。"
+    },
+    {
+      "id": "A06",
+      "stratum": "single_doc",
+      "question": "MySQL 的两阶段提交是怎么做的？redo log 和 binlog 怎么保证一致？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["mysql-logs.md"], "substrings": ["两阶段提交"] },
+      "refuse": false,
+      "verified": true,
+      "why": "该文件有 H2「两阶段提交」。⚠️「两阶段提交」grep 有 2 篇入库命中（另一篇 how-sql-executed-in-mysql.md，README.md 已排除），所以不是唯一文档；选它是因为它是 redo log/binlog 这条线的正主。"
+    },
+    {
+      "id": "A07",
+      "stratum": "single_doc",
+      "question": "如何实现一个高效的单向链表逆序输出？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["1.1.1 如何实现一个高效的单向链表逆序输出？.md"], "substrings": [] },
+      "refuse": false,
+      "verified": true,
+      "why": "本地语料（01.阿里篇）里少数「有实质答案」的题（1453 字符 / 2 块）。来源配额用：让评测集不全是 javaguide。grep「逆序输出」入库文件仅此 1 篇。⚠️ 文件名含中文标点，评测脚本必须原样匹配，不要手打。"
+    },
+    {
+      "id": "A08",
+      "stratum": "single_doc",
+      "question": "给定一个二叉搜索树(BST)，如何找到树中第 K 小的节点？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["1.1.3 给定一个二叉搜索树(BST)，找到树中第 K 小的节点.md"], "substrings": [] },
+      "refuse": false,
+      "verified": true,
+      "why": "同上，本地语料有实质答案的一题（6141 字符 / 8 块）。grep「第 K 小」入库文件仅此 1 篇——虽然「二叉搜索树」有 6 篇命中，但问「第 K 小」的只有这篇，区分度够。"
+    },
+
+    {
+      "id": "B01",
+      "stratum": "term",
+      "question": "ConcurrentHashMap 1.8 的 size 计数是怎么实现的？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["concurrent-hash-map-source-code.md"], "substrings": ["sizeCtl"] },
+      "refuse": false,
+      "verified": true,
+      "why": "强区分度：`sizeCtl` 在全部语料里只出现在这一个文件（2026-09-27 再次 grep 实证：1 篇）。这类「类名/字段名精确匹配」是稀疏检索的强项，是 2.5 混合检索的判据。"
+    },
+    {
+      "id": "B02",
+      "stratum": "term",
+      "question": "DelayQueue 的实现原理是什么？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["delayqueue-source-code.md"], "substrings": [] },
+      "refuse": false,
+      "verified": true,
+      "why": "该文件有 H3「DelayQueue 的实现原理是什么？」，问题与标题逐字相同，词面匹配最强的题。⚠️ 更正：DelayQueue 不是「文档唯一」，grep 有 3 篇入库命中（另两篇 javaguide 的 collection 汇总），所以这条实为「精确标题匹配」而非「唯一文档」的判据。"
+    },
+    {
+      "id": "B03",
+      "stratum": "term",
+      "question": "MySQL 的 innodb_flush_log_at_trx_commit 取 0、1、2 分别是什么行为？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["mysql-logs.md"], "substrings": ["innodb_flush_log_at_trx_commit"] },
+      "refuse": false,
+      "verified": true,
+      "why": "参数名是个极长的低频 token，稀疏检索（BM25）的舒适区。该文件有 H3「innodb_flush_log_at_trx_commit=0/1/2」。⚠️ grep 该参数名有 2 篇命中，不是唯一。"
+    },
+    {
+      "id": "B04",
+      "stratum": "term",
+      "question": "MySQL 的 MVCC 里 ReadView 是怎么判断一条数据可不可见的？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["innodb-implementation-of-mvcc.md"], "substrings": ["ReadView"] },
+      "refuse": false,
+      "verified": true,
+      "why": "`ReadView` grep 全语料仅 1 篇（实证）。该文件有 H3「ReadView」与 H4「数据可见性算法」。专有名词 + 唯一文档，是 term 层的标准正样本。"
+    },
+    {
+      "id": "B05",
+      "stratum": "term",
+      "question": "Java NIO 的零拷贝是怎么实现的？",
+      "history": [],
+      "expect": { "match": "any", "filenames": ["nio-basis.md"], "substrings": ["零拷贝"] },
+      "refuse": false,
+      "verified": true,
+      "why": "「零拷贝」grep 全语料仅 1 篇（实证）。该文件有 H2「NIO 零拷贝」。反问：和 B01/B04 一样属于「唯一文档 + 专名」，但这条是中文术语而非英文标识符，用来对比稀疏检索对中英文 token 的表现差异。"
+    },
+
+    {
+      "id": "C01",
+      "stratum": "multi_turn",
+      "question": "那 1.7 里是怎么做的？",
+      "history": [
+        { "role": "user", "content": "ConcurrentHashMap 1.8 的 size 计数是怎么实现的？" },
+        { "role": "assistant", "content": "（冻结的固定桩文本，不是模型实时输出）1.8 里用 baseCount + CounterCell 数组做分段计数，扩容和初始化状态由 sizeCtl 字段管理。" }
+      ],
+      "expect": { "match": "any", "filenames": ["concurrent-hash-map-source-code.md"], "substrings": ["1.7"] },
+      "refuse": false,
+      "verified": true,
+      "why": "1.4 专用。问题本身「那 1.7 里是怎么做的？」不含任何可检索的实体，靠它自己去 embedding 必然检索不到——只有做 history 改写才能命中。这就是这条要测的东西。"
+    },
+    {
+      "id": "C02",
+      "stratum": "multi_turn_cued",
+      "question": "那它的默认初始容量是多少？",
+      "history": [
+        { "role": "user", "content": "ArrayList 的扩容机制是怎样的？" },
+        { "role": "assistant", "content": "（冻结的固定桩文本）默认容量 10，扩容时 grow() 里用 newCapacity = oldCapacity + (oldCapacity >> 1)，也就是 1.5 倍，然后靠 Arrays.copyOf 把旧数组搬过去。" }
+      ],
+      "expect": { "match": "any", "filenames": ["arraylist-source-code.md"], "substrings": ["10"] },
+      "refuse": false,
+      "verified": true,
+      "why": "⚠️ 回归护栏，不是 1.4 的判据。写的时候以为「那它的默认初始容量是多少？」是纯指代，2026-09-28 实测「默认初始容量」是个可检索的实义词，baseline 不 rewrite 也命中（rank 3）。留它的价值在护栏：1.4 的改写会作用于**所有**多轮追问，一旦改写把实体带错，这三条会立刻掉，正好当回归信号。"
+    },
+    {
+      "id": "C03",
+      "stratum": "multi_turn_cued",
+      "question": "那它在什么情况下会失效？",
+      "history": [
+        { "role": "user", "content": "MySQL 的 InnoDB 为什么用 B+ 树做索引？" },
+        { "role": "assistant", "content": "（冻结的固定桩文本）B+ 树矮胖、叶子节点成链，能把磁盘 IO 次数压到 2~3 次，而且支持范围查询。" }
+      ],
+      "expect": { "match": "any", "filenames": ["mysql-index-invalidation.md"], "substrings": [] },
+      "refuse": false,
+      "verified": true,
+      "why": "⚠️ 回归护栏，不是 1.4 的判据。问题里确实没有「索引」二字，看似纯指代，但 2026-09-28 实测「失效」这个实义词已足够让稠密检索命中（rank 1），所以它测不出改写有没有用。护栏作用见 C02。"
+    },
+    {
+      "id": "C04",
+      "stratum": "multi_turn_cued",
+      "question": "那它是怎么把 Leader 选出来的？",
+      "history": [
+        { "role": "user", "content": "Zookeeper 是怎么实现分布式锁的？" },
+        { "role": "assistant", "content": "（冻结的固定桩文本）靠临时顺序节点 + watcher：客户端在锁节点下建临时顺序子节点，序号最小的拿到锁，其余监听前一个节点。" }
+      ],
+      "expect": { "match": "any", "filenames": ["12.2.5 zk是如何选举Leader的？.md"], "substrings": [] },
+      "refuse": false,
+      "verified": true,
+      "why": "⚠️ 回归护栏，不是 1.4 的判据。「Leader」是个强实义词，2026-09-28 实测 baseline 直接命中（rank 1），所以这条测不出改写有没有用。护栏作用见 C02。附带价值：目标文件属本地语料（12.Zookeeper篇），是本 stratum 唯一非 javaguide 的来源。"
+    },
+    {
+      "id": "C05",
+      "stratum": "multi_turn",
+      "question": "那它俩分别用在哪些类里？",
+      "history": [
+        { "role": "user", "content": "AQS 的独占模式和共享模式有什么区别？" },
+        { "role": "assistant", "content": "（冻结的固定桩文本，不是模型实时输出）独占模式同一时刻只允许一个线程持有同步状态，共享模式允许多个线程同时获取；落到模板方法上就是 tryAcquire/tryRelease 与 tryAcquireShared/tryReleaseShared 两套。" }
+      ],
+      "expect": { "match": "any", "filenames": ["aqs.md"], "substrings": [] },
+      "refuse": false,
+      "verified": true,
+      "why": "纯指代：问题里没有任何类名，「它俩」只能靠 history 还原成独占/共享模式，不 rewrite 去 embedding 必然 MISS。答案落在 aqs.md 第 219 行的「特性对比」表「典型实现」行——独占：ReentrantLock、ReentrantReadWriteLock 的写锁；共享：Semaphore、CountDownLatch、ReentrantReadWriteLock 的读锁。2026-09-28 已读原文确认。"
+    },
+    {
+      "id": "C06",
+      "stratum": "multi_turn",
+      "question": "那它读取的时候要加锁吗？",
+      "history": [
+        { "role": "user", "content": "CopyOnWriteArrayList 适合什么场景？" },
+        { "role": "assistant", "content": "（冻结的固定桩文本，不是模型实时输出）适合读多写少的并发场景，底层靠写时复制来保证线程安全。" }
+      ],
+      "expect": { "match": "any", "filenames": ["copyonwritearraylist-source-code.md"], "substrings": [] },
+      "refuse": false,
+      "verified": true,
+      "why": "纯指代：「它」= CopyOnWriteArrayList 只能靠 history 补全；问题里零实体，不 rewrite 必然 MISS。答案在该文件「读取元素」一节——读取不需要同步控制和锁操作，另外 get 方法读到的是快照，属于弱一致性。2026-09-28 已读原文确认（第 146/165 行）。"
+    },
+    {
+      "id": "C07",
+      "stratum": "multi_turn",
+      "question": "那它内部是用什么结构存的？",
+      "history": [
+        { "role": "user", "content": "ThreadLocal 是什么？会导致内存泄漏吗？" },
+        { "role": "assistant", "content": "（冻结的固定桩文本，不是模型实时输出）它给每个线程提供独立的变量副本，线程之间互不干扰；Entry 的 key 是弱引用，用完不 remove 会有泄漏风险。" }
+      ],
+      "expect": { "match": "any", "filenames": ["threadlocal.md"], "substrings": [] },
+      "refuse": false,
+      "verified": true,
+      "why": "纯指代：「它」= ThreadLocal 只能靠 history 还原；问题里零实体，不 rewrite 必然 MISS。答案在该文件「ThreadLocal 的数据结构」一节——Thread 持有 ThreadLocal.ThreadLocalMap，内部是 Entry 数组，与 HashMap 不同没有链表结构。2026-09-28 已读原文确认（第 79/83/89 行）。"
+    },
+
+    {
+      "id": "D01",
+      "stratum": "multi_doc",
+      "question": "线程池的四种拒绝策略分别适合什么场景？CallerRunsPolicy 能当背压用吗？",
+      "history": [],
+      "expect": {
+        "match": "all",
+        "filenames": ["java-thread-pool-summary.md", "java-thread-pool-best-practices.md"],
+        "substrings": ["CallerRunsPolicy"]
+      },
+      "refuse": false,
+      "verified": true,
+      "why": "真正「各答一半」的一对：前半（4 种策略的实际应用场景）在 summary 的 H3，后半（CallerRunsPolicy 能不能形成背压）在 best-practices 的 H2。判据可信的硬证据是 best-practices 第 15 行作者自己写的分流——「……阻塞队列及拒绝策略的基础知识，可以先看 java-thread-pool-summary.md」，即作者亲自把这条知识切成两篇。已 grep 确认两篇不重叠：summary 全文无「背压」。⚠️ 换掉的原题是「ArrayList vs CopyOnWriteArrayList」，它立不住的原因见 _schema 的标注纪律第 5 条。"
+    },
+    {
+      "id": "D02",
+      "stratum": "multi_doc",
+      "question": "用 Redis 和用 Zookeeper 实现分布式锁，各自是怎么做的？",
+      "history": [],
+      "expect": {
+        "match": "all",
+        "filenames": ["redis-questions-01.md", "12.1.9 zk的分布式锁.md"],
+        "substrings": ["分布式锁"]
+      },
+      "refuse": false,
+      "verified": true,
+      "why": "两个问题各有一篇正主：Redis 侧在该文件 H3「如何基于 Redis 实现分布式锁？」；ZK 侧是本地语料专文。⚠️「分布式锁」grep 有 10 篇命中，所以这是一条**偏难**的 match=all——召回池里全是干扰项，正好测「扩候选池」到底有没有用。"
+    },
+    {
+      "id": "D03",
+      "stratum": "multi_doc",
+      "question": "MySQL 的事务隔离级别有哪些？MVCC 在 RC 和 RR 下有什么不同表现？",
+      "history": [],
+      "expect": {
+        "match": "all",
+        "filenames": ["transaction-isolation-level.md", "innodb-implementation-of-mvcc.md"],
+        "substrings": []
+      },
+      "refuse": false,
+      "verified": true,
+      "why": "问了两件事，分别落在两篇：隔离级别的定义/幻读在一篇，RC 与 RR 下 ReadView 生成时机的差异在另一篇。和 D02 的区别：D02 是「同一件事的两种方案」，D03 是「一个概念 + 它的一个细节」。两种跨文档形态各测一条。substrings 留空是因为两篇没有共享的关键串。"
+    },
+
+    {
+      "id": "E01",
+      "stratum": "refuse",
+      "question": "Kubernetes 的 Pod 调度策略有哪些？",
+      "history": [],
+      "expect": { "match": "any", "filenames": [], "substrings": [] },
+      "refuse": true,
+      "verified": true,
+      "why": "grep 确认语料里 Kubernetes 为 0 篇。干净的领域外负样本。"
+    },
+    {
+      "id": "E02",
+      "stratum": "refuse",
+      "question": "ClickHouse 的 MergeTree 引擎是怎么做数据合并的？",
+      "history": [],
+      "expect": { "match": "any", "filenames": [], "substrings": [] },
+      "refuse": true,
+      "verified": true,
+      "why": "grep 确认 ClickHouse 为 0 篇。同上。"
+    },
+    {
+      "id": "E03",
+      "stratum": "refuse",
+      "question": "雪花算法的具体实现是怎样的？",
+      "history": [],
+      "expect": { "match": "any", "filenames": [], "substrings": [] },
+      "refuse": true,
+      "verified": true,
+      "why": "grep 确认「雪花算法」为 0 篇。⚠️ 注意它和「分布式 ID」是相邻概念——如果语料里有分布式 ID 的通用讨论，这条可能变成「部分可答」，需要再看一眼检索结果。"
+    },
+    {
+      "id": "E04",
+      "stratum": "refuse",
+      "question": "Grafana 的告警规则怎么做分级？",
+      "history": [],
+      "expect": { "match": "any", "filenames": [], "substrings": [] },
+      "refuse": true,
+      "verified": true,
+      "why": "grep 确认 Grafana 为 0 篇。这条是「语料里有监控/可观测性相关讨论，但没有这个具体产品」的类型，价值更高。"
+    },
+    {
+      "id": "E05",
+      "stratum": "refuse",
+      "question": "HBase 的 RowKey 设计要注意什么？",
+      "history": [],
+      "expect": { "match": "any", "filenames": [], "substrings": [] },
+      "refuse": true,
+      "verified": true,
+      "why": "2026-09-27 grep「HBase|Jenkins」为 0 篇。⚠️ 语料里有大量 MySQL/MongoDB/Redis，HBase 属于「同属存储领域但确实没有」，比纯领域外（Kubernetes）更容易被语义邻居误召回。"
+    },
+    {
+      "id": "E06",
+      "stratum": "refuse",
+      "question": "Jenkins 的流水线怎么配置多阶段部署？",
+      "history": [],
+      "expect": { "match": "any", "filenames": [], "substrings": [] },
+      "refuse": true,
+      "verified": true,
+      "why": "同上 grep 实证 0 篇。CI/CD 领域在语料里整体缺失。"
+    },
+    {
+      "id": "E07",
+      "stratum": "refuse",
+      "question": "领域驱动设计里的聚合根和限界上下文是什么？",
+      "history": [],
+      "expect": { "match": "any", "filenames": [], "substrings": [] },
+      "refuse": true,
+      "verified": true,
+      "why": "2026-09-27 grep「领域驱动|DDD」为 0 篇。架构设计领域缺失，但语料里有大量「设计模式/系统设计」讨论，是很好的语义邻居干扰项。"
+    },
+    {
+      "id": "E08",
+      "stratum": "refuse",
+      "question": "Redis 的 RedLock 红锁算法是怎么保证分布式锁安全性的？",
+      "history": [],
+      "expect": { "match": "any", "filenames": [], "substrings": [] },
+      "refuse": true,
+      "verified": true,
+      "why": "**这条是 ② 类负样本，最有价值**：Redis 领域语料很丰富（有分布式锁的通用实现），但「RedLock/红锁」这个具体点 grep 为 0 篇。它最能暴露「阈值有没有区分力」——问答两边都跟 Redis + 锁高度相关，稠密检索几乎一定会命中 redis-questions-01.md，如果阈值判定不严就会误答。⚠️ 也因此它可能被算成「部分可答」，需要看检索结果再定：若命中且内容确实只讲了普通分布式锁没讲 RedLock，那判为「误答」是对的。"
+    }
+  ]
+}
