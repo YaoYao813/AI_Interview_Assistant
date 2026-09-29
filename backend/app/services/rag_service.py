@@ -11,8 +11,9 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 
+from app.core.config import settings
 from app.infrastructure.embeddings import get_embedding
-from app.repositories.base_vector_store import DocumentChunk
+from app.repositories.base_vector_store import DocumentChunk, is_grounded
 from app.repositories.vector_store import get_vector_store
 from app.services.llm_service import get_llm_service, LLMService
 
@@ -112,8 +113,10 @@ class RAGService:
             threshold=threshold,
         )
 
-        # 3. 知识库无相关内容
-        if not result.hits:
+        # 3. 知识库答不了：0 命中，或命中了但没讲问题里的那件事（阶段 1.2 的拒答判定）
+        if not result.hits or (
+            settings.RETRIEVAL_TERM_GROUNDING and not is_grounded(question, result.hits)
+        ):
             return {
                 "answer": "知识库中没有与您问题相关的信息。请尝试换个问法，或上传相关文档到知识库。",
                 "sources": [],
@@ -174,13 +177,15 @@ class RAGService:
             threshold=threshold,
         )
 
-        if not result.hits:
+        if not result.hits or (
+            settings.RETRIEVAL_TERM_GROUNDING and not is_grounded(question, result.hits)
+        ):
             yield f"data: {json.dumps({'type': 'sources', 'data': []})}\n\n"
             yield f"data: {json.dumps({'type': 'token', 'data': '知识库中没有与您问题相关的信息。'})}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
             return
 
-        # 2. 拼接上下文并先发 sourcecclaude
+        # 2. 拼接上下文并先发 sources
         context = self._build_context(result.hits, history)
         sources = self._format_sources(result.hits)
         yield f"data: {json.dumps({'type': 'sources', 'data': sources})}\n\n"

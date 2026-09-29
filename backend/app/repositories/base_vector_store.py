@@ -1,3 +1,4 @@
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -39,6 +40,49 @@ class SearchResult:
     hits: list[DocumentChunk] = field(default_factory=list)
     total: int = 0
     query: str = ""
+
+
+# ========== 拒答判定（阶段 1.2）==========
+
+# 以字母开头，后续允许字母、数字和 _ . # + -（覆盖 sizeCtl / JDK1.8 / ReadView 这类写法）
+_IDENTIFIER_RE = re.compile(r"[A-Za-z][A-Za-z0-9_.#+-]+")
+
+# 长度下限 3：把 RC / RR / IO 这类两字母缩写排掉。它们在长文本里几乎必然作为
+# 子串出现，留着只会让「是否覆盖」退化成噪声——实测 D03 的 RC/RR 就是这么被误杀的。
+_MIN_IDENTIFIER_LEN = 3
+
+
+def query_identifiers(question: str) -> list[str]:
+    """问题里长度 >= 3 的英文标识符，小写去重（保持出现顺序）。"""
+    out: list[str] = []
+    for token in _IDENTIFIER_RE.findall(question or ""):
+        token = token.lower()
+        if len(token) >= _MIN_IDENTIFIER_LEN and token not in out:
+            out.append(token)
+    return out
+
+
+def missing_terms(question: str, chunks: list[DocumentChunk]) -> list[str]:
+    """问题里的英文标识符中，没能在检索结果里找到的那些（这就是「拒答」的全部理由）。
+
+    规则只有这一条；评测脚本靠它的返回值打印逐条明细，保证和生产用的是同一把尺子。
+    """
+    identifiers = query_identifiers(question)
+    if not identifiers:
+        return []
+    haystack = "\n".join(c.content or "" for c in chunks).lower()
+    return [term for term in identifiers if term not in haystack]
+
+
+def is_grounded(question: str, chunks: list[DocumentChunk]) -> bool:
+    """检索到的块是否真的在讲问题里的那件事 —— 1.2 的拒答判据。
+
+    没有任何英文标识符时**弃权**返回 True，交回老逻辑（纯中文专有名词目前抓不到）。
+
+    为什么不用分数阈值：实测正样本最低分 0.5885、负样本最高分 0.7214，
+    分数轴上不存在能分开正负样本的阈值——语义分数只负责排序，不负责判「要不要回答」。
+    """
+    return not missing_terms(question, chunks)
 
 
 class DocumentInfo:

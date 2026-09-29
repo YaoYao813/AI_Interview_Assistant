@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     # baseline 实测正样本最低分 0.5885 < 负样本最高分 0.7214，分数轴上分不开。
     RETRIEVAL_RELATIVE_RATIO: float = 0.0
 
+    # 拒答判定（阶段 1.2）
+    # 问题里的英文标识符（长度 >= 3）必须出现在检索到的块里，否则判「知识库答不了」，
+    # 直接返回固定话术、不调 LLM。免费规则、确定性、零额外调用。
+    # 实测（31 条评测题）：8 条负样本拒对 6 条，23 条正样本误杀 0 条。
+    # 漏掉的两条是纯中文专有名词（雪花算法 / 领域驱动设计）——没有分词器抓不到，
+    # 留给 2.5 稀疏检索（BM25 天然覆盖术语）。False = 退回「只有 0 命中才拒答」。
+    RETRIEVAL_TERM_GROUNDING: bool = True
+
     # File upload
     UPLOAD_DIR: str = "./data/documents"
     ALLOWED_EXTENSIONS: list[str] = [".pdf", ".docx", ".doc", ".md", ".txt"]
