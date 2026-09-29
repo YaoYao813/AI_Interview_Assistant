@@ -109,7 +109,8 @@ class BaseVectorStore(ABC):
         Args:
             query_embedding: 查询向量
             top_k: 返回结果数
-            threshold: 相似度阈值，低于此值不返回（0=不过滤）
+            threshold: 绝对相似度底线，低于此值不返回（0=不过滤）
+                       RETRIEVAL_RELATIVE_RATIO>0 时实际底线会抬到该比例 × top1
 
         Returns:
             SearchResult: hits 为 DocumentChunk 列表

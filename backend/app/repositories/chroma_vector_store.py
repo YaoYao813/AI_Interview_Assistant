@@ -3,10 +3,17 @@ from datetime import datetime, timezone
 
 import chromadb
 
+from app.core.config import settings
 from app.infrastructure.embeddings import get_embedding
 from app.repositories.base_vector_store import BaseVectorStore, DocumentChunk, DocumentInfo, SearchResult
 
 logger = logging.getLogger(__name__)
+
+# 候选池下限。Chroma 的 HNSW 是近似检索，n_results 同时决定搜索强度：
+# 给小了，返回的 top-k 本身就不准，跟阈值无关。实测（2393 chunk / 31 条真实问题）
+# n_results=5 拿到的 top-5 有 13/31 与收敛结果不同，20 → 8/31，100 → 0/31。
+# 所以先取大池、后过滤、最后截断到 top_k；池子大小以「前 5 名不再随 n_results 变」为准。
+_POOL_MIN = 100
 
 
 class ChromaVectorStore(BaseVectorStore):
@@ -66,16 +73,25 @@ class ChromaVectorStore(BaseVectorStore):
         top_k: int = 5,
         threshold: float = 0.3,
     ) -> SearchResult:
+        # 相对底线：ratio>0 时把绝对 threshold 抬到 top1 的一个比例。
+        # Chroma 按距离升序返回，第 0 条即最高分。ratio=0 时完全不介入，
+        # threshold 的原语义（含 -1 = 真不过滤）原样保留。
+        floor = threshold
+        ratio = settings.RETRIEVAL_RELATIVE_RATIO
 
+        pool = max(top_k, _POOL_MIN)
         result = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=top_k,
+            n_results=pool,
         )
 
         ids_list = result.get("ids", [[]])[0]
         docs_list = result.get("documents", [[]])[0]
         metas_list = result.get("metadatas", [[]])[0]
         distances_list = result.get("distances", [[]])[0]
+
+        if ratio > 0 and distances_list:
+            floor = max(floor, ratio * round(1 - distances_list[0], 4))
 
         hits: list[DocumentChunk] = []
         for i in range(len(ids_list)):
@@ -84,13 +100,16 @@ class ChromaVectorStore(BaseVectorStore):
             metadata = metas_list[i] if i < len(metas_list) else {}
             distance = distances_list[i] if i < len(distances_list) else 0
             chunk = DocumentChunk.from_chroma(doc_id, document, metadata, distance)
-            if chunk.similarity is not None and chunk.similarity < threshold:
+            if chunk.similarity is not None and chunk.similarity < floor:
                 logger.debug("过滤低相似度: id=%s similarity=%.4f", doc_id, chunk.similarity)
                 continue
             hits.append(chunk)
 
-        logger.info("搜索完成: top_k=%d threshold=%.2f 命中=%d 距离=%s",
-                    top_k, threshold, len(hits), distances_list)
+        # 池子是按 _POOL_MIN 取的，截断必须放最后，否则又变成「先截断后过滤」
+        hits = hits[:top_k]
+
+        logger.info("搜索完成: pool=%d top_k=%d floor=%.4f 命中=%d 距离=%s",
+                    pool, top_k, floor, len(hits), distances_list)
         return SearchResult(hits=hits, total=len(hits))
 
     # ===== 删除 =====

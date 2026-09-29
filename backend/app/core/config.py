@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     CHROMA_PERSIST_DIR: str = "./data/chroma"
     CHROMA_COLLECTION: str = "interview_docs"
 
+    # 检索后置过滤（阶段 1.1）
+    # 实际底线 = max(threshold 参数, RETRIEVAL_RELATIVE_RATIO * top1 相似度)，
+    # 在候选池里过滤完再截断到 top_k（池子下限见 chroma_vector_store._POOL_MIN）。0 = 关闭相对规则。
+    # 相对规则只用来砍长尾（同一文档占满引用位），不负责判断「要不要回答」：
+    # baseline 实测正样本最低分 0.5885 < 负样本最高分 0.7214，分数轴上分不开。
+    RETRIEVAL_RELATIVE_RATIO: float = 0.0
+
     # File upload
     UPLOAD_DIR: str = "./data/documents"
     ALLOWED_EXTENSIONS: list[str] = [".pdf", ".docx", ".doc", ".md", ".txt"]
