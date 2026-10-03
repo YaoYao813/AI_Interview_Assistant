@@ -137,15 +137,17 @@ class LLMService:
 
     @property
     def max_context_tokens(self) -> int:
-        """当前模型的最大上下文窗口"""
+        """当前模型的最大上下文窗口。
+
+        厂商 /models 只返回模型 id，不给窗口大小，所以这张表是**人工维护**的：
+        换模型必须一起改。未登记的模型会静默落到兜底值 16385——那是个错值，
+        真要拿它做上下文截断之前，先把表补全。
+        """
         context_map = {
-            "gpt-4o": 128000,
-            "gpt-4o-mini": 128000,
-            "gpt-4-turbo": 128000,
-            "gpt-3.5-turbo": 16385,
-            "deepseek-chat": 65536,
+            "deepseek-flash": 65536,
+            "deepseek-v4-pro": 65536,
+            "deepseek-chat": 65536,   # 未列出的兼容别名，实际路由到 deepseek-flash
             "deepseek-v3": 65536,
-            "qwen3-max": 32768,
         }
         return context_map.get(self.model, 16385)
 

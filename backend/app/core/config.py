@@ -54,19 +54,24 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 1000
     CHUNK_OVERLAP: int = 200
 
-    # LLM (DashScope)
+    # LLM
+    # 默认值与 .env 保持一致：本文件此前写的是 DashScope/qwen3-max，
+    # 与实际运行配置不符，读代码会得出完全错误的结论。
+    # 模型只在厂商 /models 列出的 deepseek-flash / deepseek-v4-pro 里选
+    # （deepseek-chat 是个未列出的兼容别名，实测会静默路由到 deepseek-flash）。
     LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    LLM_MODEL: str = "qwen3-max"
+    LLM_BASE_URL: str = "https://api.deepseek.com/v1"
+    LLM_MODEL: str = "deepseek-flash"
     LLM_MAX_TOKENS: int = 2048
     LLM_TEMPERATURE: float = 0.7
     LLM_REQUEST_TIMEOUT: int = 60
     LLM_MAX_RETRIES: int = 3
 
-    # Embedding (DashScope)
+    # Embedding
+    # 实际跑的是硅基流动的 BAAI/bge-m3（1024 维），不是 DashScope。
     EMBEDDING_API_KEY: str = ""
-    EMBEDDING_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    EMBEDDING_MODEL: str = "text-embedding-v4"
+    EMBEDDING_BASE_URL: str = "https://api.siliconflow.cn/v1"
+    EMBEDDING_MODEL: str = "BAAI/bge-m3"
     EMBEDDING_DIMENSION: int = 1024
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
