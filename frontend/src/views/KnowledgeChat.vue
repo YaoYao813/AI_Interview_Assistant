@@ -60,7 +60,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onDeactivated, nextTick } from 'vue'
 import { chatQuery, getKnowledgeStatistics, RAG_CHAT_STREAM_URL } from '@/api/knowledge'
 import { streamSSE } from '@/utils/sse'
 import { useChatStore } from '@/stores/chat'
@@ -98,11 +98,15 @@ function handleDeleteConversation(id) {
 }
 
 // 切换会话刻意不断开：loading 是会话级的，后台跑完落回自己的会话属于预期行为。
-// 离开页面则必须断开，否则连接会在组件销毁后继续读。
-onUnmounted(() => {
+// 离开页面则要断开，否则流会在后台继续跑、白白消耗 token。
+// 注意 AppLayout 外面套了 <keep-alive>：路由切走只触发 deactivated、不触发 unmounted，
+// 所以断开必须挂在 onDeactivated 上（onUnmounted 只在整体卸载时兜底）。
+function abortAllStreams() {
   for (const controller of streamControllers.value.values()) controller.abort()
   streamControllers.value.clear()
-})
+}
+onDeactivated(abortAllStreams)
+onUnmounted(abortAllStreams)
 
 onMounted(async () => {
   chatStore.ensureActiveConversation()
@@ -162,6 +166,7 @@ async function sendStream(question, top_k, threshold, history, convId, controlle
 
   let aborted = false
   let lost = false
+  let failed = false
 
   try {
     await streamSSE(
@@ -178,6 +183,7 @@ async function sendStream(question, top_k, threshold, history, convId, controlle
       lost = true
       console.warn('[KnowledgeChat] 流式请求空闲超时：', e)
     } else {
+      failed = true
       console.warn('[KnowledgeChat] 流式请求中断：', e)
     }
   } finally {
@@ -187,12 +193,27 @@ async function sendStream(question, top_k, threshold, history, convId, controlle
     }
     const msg = chatStore.conversations.find(c => c.id === convId)?.messages[msgIndex]
     const patch = { isLoading: false }
-    if (msg && !msg.content) {
-      patch.content = aborted
-        ? '（已停止生成）'
+    if (msg) {
+      const tail = aborted
+        ? '已停止生成，回答不完整'
         : lost
-          ? '（连接空闲超时，已中断）'
-          : '请求失败，请检查后端服务。'
+          ? '连接空闲超时，已中断'
+          : failed
+            ? '响应中断，回答可能不完整'
+            : ''
+      if (!msg.content) {
+        // 一个字都没生成：给一句能看懂的话，别留一个空气泡
+        patch.content = aborted
+          ? '（已停止生成）'
+          : lost
+            ? '（连接空闲超时，已中断）'
+            : failed
+              ? '请求失败，请检查后端服务。'
+              : ''
+      } else if (tail) {
+        // 已经生成了一部分：必须留下断点标记，否则半截回答看起来和完整回答一模一样
+        patch.content = `${msg.content}\n\n（${tail}）`
+      }
     }
     chatStore.updateMessage(convId, msgIndex, patch)
     // 流结束后立刻落盘，不等节流窗口

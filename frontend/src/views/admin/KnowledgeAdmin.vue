@@ -169,11 +169,6 @@
               已记录 {{ stats.sized_document_count }}/{{ stats.document_count }} 篇
             </span>
           </div>
-          <div class="stat-card">
-            <!-- 能出现在向量库里就等于已向量化，这个数恒等于文档总数 -->
-            <span class="stat-num">{{ loadError ? '—' : stats.document_count }}</span>
-            <span class="stat-label">已向量化</span>
-          </div>
         </div>
 
         <div class="detail-toolbar">
