@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     # Text splitter
     CHUNK_SIZE: int = 1000
     CHUNK_OVERLAP: int = 200
+    # 切分策略（阶段 2.1）：
+    #   recursive       = 旧的递归字符切分，作为基线与回退
+    #   markdown_header = 按 #/##/### 标题切；无标题文档（PDF/本地八股）递归兜底
+    # 只在【入库时】生效——查询链路从不切分，所以改它必须重建语料才看得到效果。
+    CHUNK_STRATEGY: str = "markdown_header"
+    # 最小块下限：同一父标题下连续的、短于该值的兄弟 section 会被合并，避免标题
+    # 密集的文档（JavaGuide 有 1205 个 H3）产出大量碎块。仅 markdown_header 生效。
+    CHUNK_MIN_SIZE: int = 200
 
     # LLM
     # 默认值与 .env 保持一致：本文件此前写的是 DashScope/qwen3-max，

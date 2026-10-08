@@ -52,6 +52,12 @@ class ChromaVectorStore(BaseVectorStore):
                 "chunk_size": c.get("chunk_size", len(c["content"])),
                 "created_at": created_at,
             }
+            # 标题感知切分才有 heading_path；递归切分没有这个键。
+            # Chroma metadata 只收标量，splitter 已用 " > " join 成字符串；
+            # 空串是噪声，直接不写这个键。
+            heading_path = c.get("heading_path")
+            if heading_path:
+                meta["heading_path"] = heading_path
             # Chroma 的 metadata 不接受 None，缺大小就整个字段不写
             if file_size is not None:
                 meta["file_size"] = file_size
