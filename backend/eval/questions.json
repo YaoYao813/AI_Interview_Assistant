@@ -59,7 +59,8 @@
       "chunk_size": 1000,
       "chunk_overlap": 200,
       "embedding_model": "BAAI/bge-m3",
-      "note": "语料一变（重建/重新切分），这个快照就要更新，且所有历史数字需要重测。2026-10-08（阶段 2.1a）：切分从 recursive 换成 markdown_header，chunk 2393→2898，v1–v4 的相似度数字与当前索引不再对应"
+      "embed_prefix": "heading_path",
+      "note": "语料一变（重建/重新切分），这个快照就要更新，且所有历史数字需要重测。2026-10-08（阶段 2.1a）：切分从 recursive 换成 markdown_header，chunk 2393→2898，v1–v4 的相似度数字与当前索引不再对应。2026-10-08（阶段 2.1b）：算向量时前置 heading_path、落盘 documents 仍是纯正文，chunk 数不变但向量全变——embed_prefix 字段就是用来区分 v5/v6 的"
     },
     "strata_plan": {
       "single_doc": { "target": "6-8", "actual": 8, "serves": "1.1 阈值后置过滤" },

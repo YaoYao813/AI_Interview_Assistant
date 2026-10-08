@@ -392,7 +392,7 @@ async def main() -> None:
         "by_threshold": by_threshold,
         "by_grounding": grounding,
     }
-    out = Path(__file__).parent / "baseline_v5.json"
+    out = Path(__file__).parent / "baseline_v6.json"
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n已写入 {out}")
 
