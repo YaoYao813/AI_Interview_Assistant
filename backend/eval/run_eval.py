@@ -376,7 +376,7 @@ async def main() -> None:
 
     payload = {
         "meta": {
-            "date": "2026-09-29",
+            "date": "2026-10-08",
             "top_k_pool": TOP_K_POOL,
             "prod_top_k": PROD_TOP_K,
             "thresholds": THRESHOLDS,
@@ -392,7 +392,7 @@ async def main() -> None:
         "by_threshold": by_threshold,
         "by_grounding": grounding,
     }
-    out = Path(__file__).parent / "baseline_v4.json"
+    out = Path(__file__).parent / "baseline_v5.json"
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n已写入 {out}")
 

@@ -51,14 +51,15 @@
   "meta": {
     "version": 5,
     "created": "2026-09-22",
-    "updated": "2026-09-29",
+    "updated": "2026-10-08",
     "corpus_snapshot": {
       "document_count": 229,
-      "chunk_count": 2393,
+      "chunk_count": 2898,
+      "chunk_strategy": "markdown_header",
       "chunk_size": 1000,
       "chunk_overlap": 200,
       "embedding_model": "BAAI/bge-m3",
-      "note": "语料一变（重建/重新切分），这个快照就要更新，且所有历史数字需要重测"
+      "note": "语料一变（重建/重新切分），这个快照就要更新，且所有历史数字需要重测。2026-10-08（阶段 2.1a）：切分从 recursive 换成 markdown_header，chunk 2393→2898，v1–v4 的相似度数字与当前索引不再对应"
     },
     "strata_plan": {
       "single_doc": { "target": "6-8", "actual": 8, "serves": "1.1 阈值后置过滤" },
