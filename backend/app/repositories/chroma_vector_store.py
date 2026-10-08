@@ -16,6 +16,16 @@ logger = logging.getLogger(__name__)
 _POOL_MIN = 100
 
 
+def _embed_text(chunk: dict) -> str:
+    """算向量用的文本 = heading_path + 正文（阶段 2.1b）。
+
+    有 heading_path 才前置；无标题文档 / 前言块（path 为空）原样返回，不产生多余空行。
+    只影响向量——存进 Chroma 的 documents 仍是 chunk["content"]，见 add_documents 的注释。
+    """
+    path = chunk.get("heading_path")
+    return f"{path}\n{chunk['content']}" if path else chunk["content"]
+
+
 class ChromaVectorStore(BaseVectorStore):
     """基于 ChromaDB 的向量存储实现"""
 
@@ -38,8 +48,12 @@ class ChromaVectorStore(BaseVectorStore):
         if not chunks:
             return 0
 
+        # 送 embed 的文本带 heading_path，存进 Chroma 的 documents 是干净正文——两份。
+        # Chroma 只在【没给】embeddings 时才自己去编码 documents；这里 embeddings 是显式
+        # 传入的，所以两者可以不同。这正是「检索时带章节上下文、喂给 LLM 时给干净正文」。
+        # 代价：documents 从此推不回它的向量，将来任何「读正文重算向量」的迁移都会静默换掉向量。
         texts = [c["content"] for c in chunks]
-        embeddings = await get_embedding().embed_documents(texts)
+        embeddings = await get_embedding().embed_documents([_embed_text(c) for c in chunks])
 
         ids = [f"{document_id}_{c['chunk_index']}" for c in chunks]
         created_at = datetime.now(timezone.utc).isoformat()
