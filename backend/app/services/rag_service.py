@@ -13,6 +13,7 @@ from collections.abc import AsyncGenerator
 
 from app.core.config import settings
 from app.infrastructure.embeddings import get_embedding
+from app.infrastructure.rerank import rerank
 from app.repositories.base_vector_store import DocumentChunk, is_grounded
 from app.repositories.vector_store import get_vector_store
 from app.services.llm_service import get_llm_service, LLMService
@@ -128,15 +129,20 @@ class RAGService:
         # 2. 查询改写 + 向量检索（内部 embedding）
         retrieval_query = await self._rewrite_query(question, history)  # 只影响"取回什么"
         query_embedding = await self._embedding.embed_query(retrieval_query) # 将问题转为向量
+        # 2.2：开启重排就多取候选（5 → RERANK_CANDIDATES）；关 = 原样取 top_k
+        search_k = settings.RERANK_CANDIDATES if settings.RERANK_ENABLED else top_k
         result = self._vector_store.search( # 检索向量
             query_embedding=query_embedding,
-            top_k=top_k,
+            top_k=search_k,
             threshold=threshold,
         )
+        # 2.2：跨编码器重排。必须在拒答判定【之前】——is_grounded 看的正是最终
+        # 喂给 LLM 的那几条，重排会改集合成员，判定必须锚在重排后的集合上。
+        hits = await self._rerank_if_enabled(retrieval_query, result.hits, top_k)
 
         # 3. 知识库答不了：0 命中，或命中了但没讲问题里的那件事（阶段 1.2 的拒答判定）
-        if not result.hits or (
-            settings.RETRIEVAL_TERM_GROUNDING and not is_grounded(question, result.hits)
+        if not hits or (
+            settings.RETRIEVAL_TERM_GROUNDING and not is_grounded(question, hits)
         ):
             return {
                 "answer": "知识库中没有与您问题相关的信息。请尝试换个问法，或上传相关文档到知识库。",
@@ -146,7 +152,7 @@ class RAGService:
             }
 
         # 4. 拼接上下文（历史 + 文档）
-        context = self._build_context(result.hits, history)
+        context = self._build_context(hits, history)
 
         # 5. 调用 LLM 生成回答
         try:
@@ -163,7 +169,7 @@ class RAGService:
             token_count = 0
 
         # 6. 组装 sources
-        sources = self._format_sources(result.hits)
+        sources = self._format_sources(hits)
 
         return {
             "answer": answer_text,
@@ -193,14 +199,18 @@ class RAGService:
         # 1. 查询改写 + 向量检索（改写只影响"取回什么"）
         retrieval_query = await self._rewrite_query(question, history)
         query_embedding = await self._embedding.embed_query(retrieval_query)
+        # 2.2：开启重排就多取候选（5 → RERANK_CANDIDATES）；关 = 原样取 top_k
+        search_k = settings.RERANK_CANDIDATES if settings.RERANK_ENABLED else top_k
         result = self._vector_store.search(
             query_embedding=query_embedding,
-            top_k=top_k,
+            top_k=search_k,
             threshold=threshold,
         )
+        # 2.2：重排（与 answer() 同一条路径——两个入口不能各写各的，否则会分叉）
+        hits = await self._rerank_if_enabled(retrieval_query, result.hits, top_k)
 
-        if not result.hits or (
-            settings.RETRIEVAL_TERM_GROUNDING and not is_grounded(question, result.hits)
+        if not hits or (
+            settings.RETRIEVAL_TERM_GROUNDING and not is_grounded(question, hits)
         ):
             yield f"data: {json.dumps({'type': 'sources', 'data': []})}\n\n"
             yield f"data: {json.dumps({'type': 'token', 'data': '知识库中没有与您问题相关的信息。'})}\n\n"
@@ -208,8 +218,8 @@ class RAGService:
             return
 
         # 2. 拼接上下文并先发 sources
-        context = self._build_context(result.hits, history)
-        sources = self._format_sources(result.hits)
+        context = self._build_context(hits, history)
+        sources = self._format_sources(hits)
         yield f"data: {json.dumps({'type': 'sources', 'data': sources})}\n\n"
 
         # 3. 流式调用 LLM
@@ -230,6 +240,17 @@ class RAGService:
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     # ========== 私有方法 ==========
+
+    async def _rerank_if_enabled(
+        self, query: str, hits: list[DocumentChunk], top_k: int
+    ) -> list[DocumentChunk]:
+        """2.2 的唯一调用点。关 = 原样返回（零开销）；开 = 取前 RERANK_CANDIDATES 条重排。
+
+        query 用改写后的 retrieval_query：重排属于「取回什么」，和 embed 同源。
+        """
+        if not settings.RERANK_ENABLED:
+            return hits
+        return await rerank(query, hits[:settings.RERANK_CANDIDATES], top_k)
 
     async def _rewrite_query(self, question: str, history: list[dict] | None) -> str:
         """把指代追问改写成可独立检索的完整问句 —— 1.4 的【唯一】函数边界。

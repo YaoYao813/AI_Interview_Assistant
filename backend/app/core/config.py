@@ -82,6 +82,18 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "BAAI/bge-m3"
     EMBEDDING_DIMENSION: int = 1024
 
+    # Rerank（阶段 2.2）
+    # 检索之上的策略，不改索引、不改库。坐在 search() 与拒答判定之间，只改「顺序」
+    # 和「喂给 LLM 的是哪几条」。RERANK_ENABLED 是唯一的 A/B 开关；下面两个是它的
+    # 参数，不是独立策略。默认 False = 完全退回当前行为（v6）。
+    RERANK_ENABLED: bool = False
+    # 跨编码器每对 (query, doc) 都要跑一次模型，成本正比于候选数；且 doc 向量无法
+    # 预算缓存，所以它只能当「粗排之后的精排」，不能当粗排本身。
+    RERANK_MODEL: str = "BAAI/bge-reranker-v2-m3"
+    # 拿去重排的候选数：从粗排结果里取前 N 条喂跨编码器。太小救不回被错排的，
+    # 太大白花钱——比 top_k=5 大得多、又不至于让单次问答明显变慢的折中。
+    RERANK_CANDIDATES: int = 30
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
