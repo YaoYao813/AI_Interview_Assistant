@@ -17,7 +17,9 @@ import logging
 import sys
 from pathlib import Path
 
+from app.core.config import settings
 from app.infrastructure.embeddings import get_embedding
+from app.infrastructure.rerank import rerank
 from app.repositories.base_vector_store import (
     DocumentChunk,
     is_grounded,
@@ -54,10 +56,18 @@ async def retrieve_all(questions: list[str]) -> list[list[DocumentChunk]]:
 
     store = get_vector_store()
     per_question: list[list[DocumentChunk]] = []
-    for vec in vectors:
+    for i, vec in enumerate(vectors):
         # threshold=-1 表示真不过滤（源码是「similarity < threshold 就丢」）
         result = store.search(query_embedding=vec, top_k=TOP_K_POOL, threshold=-1)
-        per_question.append(result.hits)
+        hits = result.hits
+        # 2.2：和生产用【同一个】rerank()，否则量的不是生产行为。评测本来就取满 100 条，
+        # 只在前 RERANK_CANDIDATES 条里重排 → v6→v7 精确隔离「重排」这一个变量；
+        # 生产口径里「池子 5→30」那半个变量，评测里天然不掺进来。
+        if settings.RERANK_ENABLED:
+            hits = await rerank(
+                questions[i], hits[:settings.RERANK_CANDIDATES], settings.RERANK_CANDIDATES
+            )
+        per_question.append(hits)
     return per_question
 
 
@@ -376,7 +386,7 @@ async def main() -> None:
 
     payload = {
         "meta": {
-            "date": "2026-10-08",
+            "date": "2026-10-09",
             "top_k_pool": TOP_K_POOL,
             "prod_top_k": PROD_TOP_K,
             "thresholds": THRESHOLDS,
@@ -386,13 +396,16 @@ async def main() -> None:
             "grounding_rule": "RETRIEVAL_TERM_GROUNDING: 问题里 >=3 字符的英文标识符必须出现在前 top_k 块里",
             "rewrite_rule": "RETRIEVAL_QUERY_REWRITE: 带 history 的题用 questions.json 里冻结的 rewrite 检索；grounding 仍用原始 question",
             "rewritten_cases": [c["id"] for c in cases if c.get("rewrite")],
+            "rerank_enabled": settings.RERANK_ENABLED,
+            "rerank_model": settings.RERANK_MODEL if settings.RERANK_ENABLED else None,
+            "rerank_candidates": settings.RERANK_CANDIDATES if settings.RERANK_ENABLED else None,
         },
         "per_question": judged,          # 形状见 RUN_EVAL_HINTS.md §6
         "by_stratum": by_stratum,
         "by_threshold": by_threshold,
         "by_grounding": grounding,
     }
-    out = Path(__file__).parent / "baseline_v6.json"
+    out = Path(__file__).parent / "baseline_v7.json"
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n已写入 {out}")
 
