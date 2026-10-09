@@ -151,6 +151,10 @@ class RAGService:
                 "token_count": 0,
             }
 
+        # 3.5 2.4：把喂给 LLM 的上下文压进 token 预算（在拒答判定【之后】——拒答只看
+        # 知识库里有没有，不看喂多少）。裁【一次】，上下文与来源共用同一份 hits，编号才对得上。
+        hits, history = self._apply_budget(hits, history)
+
         # 4. 拼接上下文（历史 + 文档）
         context = self._build_context(hits, history)
 
@@ -217,6 +221,9 @@ class RAGService:
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
             return
 
+        # 2.4：预算截断（拒答判定之后；裁一次，上下文与来源共用同一份 hits）
+        hits, history = self._apply_budget(hits, history)
+
         # 2. 拼接上下文并先发 sources
         context = self._build_context(hits, history)
         sources = self._format_sources(hits)
@@ -251,6 +258,63 @@ class RAGService:
         if not settings.RERANK_ENABLED:
             return hits
         return await rerank(query, hits[:settings.RERANK_CANDIDATES], top_k)
+
+    # ===== 2.4 上下文 token 预算 =====
+
+    def _render_sources(self, chunks: list[DocumentChunk]) -> list[str]:
+        """按文档聚合渲染每条来源。抽出来是为了让「预算测量」和「实际拼接」用同一份文本，
+        否则 measured（_sources_tokens）和 rendered（_build_context）会悄悄分叉。"""
+        return [
+            f"[{src['index']}] {src['content']}\n"
+            f"（文档：{src['document']}，相似度：{src['similarity']:.2f}）"
+            for src in self._group_sources(chunks)
+        ]
+
+    def _sources_tokens(self, chunks: list[DocumentChunk]) -> int:
+        return self._llm.count_tokens("\n\n".join(self._render_sources(chunks)))
+
+    def _trim_history(self, history: list[dict] | None, budget: int) -> list[dict]:
+        """保留最近的若干条消息（从最新往前收，收不下就停），恢复时间顺序返回。
+        按【整条消息】截，不按字符硬切——否则会留半句 assistant 回复。"""
+        if not history:
+            return []
+        kept: list[dict] = []
+        used = 0
+        for msg in reversed(history):
+            t = self._llm.count_messages_tokens([msg])  # 接上此前零引用的死方法
+            if used + t > budget:
+                break
+            kept.append(msg)
+            used += t
+        return list(reversed(kept))
+
+    def _apply_budget(
+        self, chunks: list[DocumentChunk], history: list[dict] | None
+    ) -> tuple[list[DocumentChunk], list[dict]]:
+        """把「喂给 LLM 的上下文」压进 token 预算，返回 (保留的 chunks, 截过的 history)。
+
+        **必须在拒答判定之后调用**：预算只决定「喂多少」，不决定「能不能答」，
+        所以拒答仍看截断前的集合，grounding / recall 不受影响。
+        历史先占（≤ HISTORY_MAX_TOKENS），剩下的留给来源；来源从排名最低的块
+        （hits 尾部）丢，至少留 1 条——保证最高分来源不被丢。
+        """
+        kept_history = self._trim_history(history, settings.HISTORY_MAX_TOKENS)
+        hist_tokens = self._llm.count_messages_tokens(kept_history) if kept_history else 0
+        budget = max(settings.CONTEXT_MAX_TOKENS - hist_tokens, 0)
+
+        kept = list(chunks)
+        while len(kept) > 1:
+            if self._sources_tokens(kept) <= budget:
+                break
+            kept.pop()  # hits 尾部 = 重排后排名最低的那块
+        return kept, kept_history
+
+    def context_token_count(
+        self, chunks: list[DocumentChunk], history: list[dict] | None = None
+    ) -> int:
+        """2.4 的测量口径：按预算截断后、真正会喂给 LLM 的那段上下文的 token 数（评测用）。"""
+        kept, kept_history = self._apply_budget(chunks, history)
+        return self._llm.count_tokens(self._build_context(kept, kept_history))
 
     async def _rewrite_query(self, question: str, history: list[dict] | None) -> str:
         """把指代追问改写成可独立检索的完整问句 —— 1.4 的【唯一】函数边界。
@@ -361,12 +425,7 @@ class RAGService:
             parts.append("")
 
         # 参考文档（按文档聚合，编号与前端引用来源一致）
-        for src in self._group_sources(chunks):
-            part = (
-                f"[{src['index']}] {src['content']}\n"
-                f"（文档：{src['document']}，相似度：{src['similarity']:.2f}）"
-            )
-            parts.append(part)
+        parts.extend(self._render_sources(chunks))
         return "\n\n".join(parts)
 
     def _format_sources(self, chunks: list[DocumentChunk]) -> list[dict]:

@@ -94,6 +94,17 @@ class Settings(BaseSettings):
     # 太大白花钱——比 top_k=5 大得多、又不至于让单次问答明显变慢的折中。
     RERANK_CANDIDATES: int = 30
 
+    # 上下文 token 预算（阶段 2.4）
+    # 只约束【喂给 LLM 的上下文】，不参与拒答判定——截断在拒答判定【之后】做，
+    # 所以 recall / grounding 一个都不动，只新增一个 context_tokens 测量。
+    # 整个上下文（历史 + 检索来源）不超过 CONTEXT_MAX_TOKENS；其中历史最多
+    # HISTORY_MAX_TOKENS，剩下的留给来源。超预算时从排名最低的来源（hits 尾部）丢，
+    # 至少留 1 条——保证最高分来源不被丢。
+    # 刻意【不用】llm_service.max_context_tokens：那是模型窗口（硬上限 65536），
+    # 不是成本/质量意义上的预算（软目标），语义不同，兜底值 16385 也不可信。
+    CONTEXT_MAX_TOKENS: int = 6000
+    HISTORY_MAX_TOKENS: int = 1500
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
