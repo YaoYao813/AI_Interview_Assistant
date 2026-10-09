@@ -27,6 +27,7 @@ from app.repositories.base_vector_store import (
     query_identifiers,
 )
 from app.repositories.vector_store import get_vector_store
+from app.services.rag_service import get_rag_service
 
 # 候选池取值必须与生产的 chroma_vector_store._POOL_MIN 一致。
 # Chroma 的 HNSW 是近似检索、n_results 同时决定搜索强度：池子给 20 时
@@ -378,11 +379,23 @@ async def main() -> None:
     hits_per_question = await retrieve_all([c.get("rewrite") or c["question"] for c in cases])
     judged = [judge(c, h) for c, h in zip(cases, hits_per_question)]
 
+    # 2.4：测量「按预算截断后、真正会喂给 LLM 的上下文」的 token 数。评测集没有 history
+    # 对象（多轮题的改写是冻结字段、不是历史），所以这里 history 恒为 None。
+    rag = get_rag_service()
+    for j, h in zip(judged, hits_per_question):
+        j["context_tokens"] = rag.context_token_count(h[:PROD_TOP_K])
+
     by_stratum = aggregate(judged)
     by_threshold = {str(t): sweep_threshold(judged, t) for t in THRESHOLDS}
     grounding = grounding_verdict(judged)
 
     print(render(judged, by_stratum, by_threshold, grounding))
+
+    ctx = [j["context_tokens"] for j in judged]
+    over = [j["id"] for j in judged if j["context_tokens"] > settings.CONTEXT_MAX_TOKENS]
+    print(f"\n§4.5 上下文 token 预算（2.4，口径：prod top_k={PROD_TOP_K} + 预算截断，history=None）")
+    print(f"  预算 {settings.CONTEXT_MAX_TOKENS}  平均 {sum(ctx) / len(ctx):.0f}  "
+          f"最大 {max(ctx)}  超预算 {len(over)} 条 {over or ''}")
 
     payload = {
         "meta": {
@@ -399,13 +412,23 @@ async def main() -> None:
             "rerank_enabled": settings.RERANK_ENABLED,
             "rerank_model": settings.RERANK_MODEL if settings.RERANK_ENABLED else None,
             "rerank_candidates": settings.RERANK_CANDIDATES if settings.RERANK_ENABLED else None,
+            "context_max_tokens": settings.CONTEXT_MAX_TOKENS,
+            "history_max_tokens": settings.HISTORY_MAX_TOKENS,
         },
         "per_question": judged,          # 形状见 RUN_EVAL_HINTS.md §6
         "by_stratum": by_stratum,
         "by_threshold": by_threshold,
         "by_grounding": grounding,
+        "by_context": {
+            "context_max_tokens": settings.CONTEXT_MAX_TOKENS,
+            "history_max_tokens": settings.HISTORY_MAX_TOKENS,
+            "avg_context_tokens": round(sum(ctx) / len(ctx), 1),
+            "max_context_tokens": max(ctx),
+            "over_budget_ids": over,
+            "note": "口径 = prod top_k=5 + 2.4 预算截断，history=None；只测量不改检索，recall/grounding 应与上一版一致",
+        },
     }
-    out = Path(__file__).parent / "baseline_v7.json"
+    out = Path(__file__).parent / "baseline_v8.json"
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n已写入 {out}")
 
