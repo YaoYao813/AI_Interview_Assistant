@@ -14,6 +14,7 @@ from collections.abc import AsyncGenerator
 from app.core.config import settings
 from app.infrastructure.embeddings import get_embedding
 from app.infrastructure.rerank import rerank
+from app.infrastructure.sparse import get_bm25_store, rrf_fuse
 from app.repositories.base_vector_store import DocumentChunk, is_grounded
 from app.repositories.vector_store import get_vector_store
 from app.services.llm_service import get_llm_service, LLMService
@@ -136,9 +137,12 @@ class RAGService:
             top_k=search_k,
             threshold=threshold,
         )
+        # 2.5：并联稀疏一路（BM25）RRF 融合。【在 rerank 之前】——融合属粗排，
+        # 精排要看到融合后的候选集。关 = 原样返回稠密结果。
+        hits = self._hybrid_if_enabled(retrieval_query, result.hits, search_k)
         # 2.2：跨编码器重排。必须在拒答判定【之前】——is_grounded 看的正是最终
         # 喂给 LLM 的那几条，重排会改集合成员，判定必须锚在重排后的集合上。
-        hits = await self._rerank_if_enabled(retrieval_query, result.hits, top_k)
+        hits = await self._rerank_if_enabled(retrieval_query, hits, top_k)
 
         # 3. 知识库答不了：0 命中，或命中了但没讲问题里的那件事（阶段 1.2 的拒答判定）
         if not hits or (
@@ -210,8 +214,10 @@ class RAGService:
             top_k=search_k,
             threshold=threshold,
         )
+        # 2.5：混合检索（与 answer() 同一条路径）
+        hits = self._hybrid_if_enabled(retrieval_query, result.hits, search_k)
         # 2.2：重排（与 answer() 同一条路径——两个入口不能各写各的，否则会分叉）
-        hits = await self._rerank_if_enabled(retrieval_query, result.hits, top_k)
+        hits = await self._rerank_if_enabled(retrieval_query, hits, top_k)
 
         if not hits or (
             settings.RETRIEVAL_TERM_GROUNDING and not is_grounded(question, hits)
@@ -258,6 +264,18 @@ class RAGService:
         if not settings.RERANK_ENABLED:
             return hits
         return await rerank(query, hits[:settings.RERANK_CANDIDATES], top_k)
+
+    def _hybrid_if_enabled(
+        self, query: str, hits: list[DocumentChunk], top_k: int
+    ) -> list[DocumentChunk]:
+        """2.5 的唯一调用点。关 = 原样返回（零开销）；开 = 稀疏一路 RRF 融合。
+
+        同步函数——BM25 是纯本地计算，无网络调用（rerank 才是异步的）。
+        query 用改写后的 retrieval_query：稀疏也属于「取回什么」，与 embed / rerank 同源。
+        """
+        if not settings.RETRIEVAL_HYBRID_ENABLED:
+            return hits
+        return rrf_fuse(hits, get_bm25_store().search(query, top_k), top_k)
 
     # ===== 2.4 上下文 token 预算 =====
 

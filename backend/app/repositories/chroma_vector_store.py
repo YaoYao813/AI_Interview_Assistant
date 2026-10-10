@@ -177,6 +177,24 @@ class ChromaVectorStore(BaseVectorStore):
     def get_chunk_count(self) -> int:
         return self.collection.count()
 
+    def all_chunks(self) -> list[DocumentChunk]:
+        """全量块（不带 similarity）。供稀疏索引（阶段 2.5 的 BM25）从同一份语料建索引。
+
+        O(N) 全表读，只在 BM25 索引首次构建时调用一次，不在查询路径上。
+        """
+        data = self.collection.get(include=["documents", "metadatas"])
+        ids = data.get("ids", [])
+        docs = data.get("documents", [])
+        metas = data.get("metadatas", [])
+        return [
+            DocumentChunk(
+                chunk_id=ids[i],
+                content=docs[i] if i < len(docs) else "",
+                metadata=metas[i] if i < len(metas) and metas[i] else {},
+            )
+            for i in range(len(ids))
+        ]
+
     # ===== 列表 =====
 
     def list_documents(

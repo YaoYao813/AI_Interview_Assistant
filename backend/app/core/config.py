@@ -94,6 +94,15 @@ class Settings(BaseSettings):
     # 太大白花钱——比 top_k=5 大得多、又不至于让单次问答明显变慢的折中。
     RERANK_CANDIDATES: int = 30
 
+    # 混合检索（阶段 2.5）
+    # 在稠密检索（Chroma 余弦）之上并联一路稀疏检索（BM25，词法精确匹配），两路用
+    # RRF 融合成一个排序，再交给 2.2 的 rerank。**不改索引、不改库**——BM25 索引是
+    # 启动后按需从 Chroma 现读现建的（2393 块量级、内存足够）。
+    # 它补的是稠密的短处：罕见标识符 / 术语（如 sizeCtl）语义近邻会压过正主，BM25 靠
+    # 字面命中把它拉回第一。默认 False = 完全退回当前行为（v8）。
+    # 唯一配置项即此开关；融合函数边界见 app/infrastructure/sparse.py 的 rrf_fuse()。
+    RETRIEVAL_HYBRID_ENABLED: bool = False
+
     # 上下文 token 预算（阶段 2.4）
     # 只约束【喂给 LLM 的上下文】，不参与拒答判定——截断在拒答判定【之后】做，
     # 所以 recall / grounding 一个都不动，只新增一个 context_tokens 测量。
