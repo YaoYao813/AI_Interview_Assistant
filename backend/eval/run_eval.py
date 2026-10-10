@@ -20,6 +20,7 @@ from pathlib import Path
 from app.core.config import settings
 from app.infrastructure.embeddings import get_embedding
 from app.infrastructure.rerank import rerank
+from app.infrastructure.sparse import RRF_K, get_bm25_store, rrf_fuse
 from app.repositories.base_vector_store import (
     DocumentChunk,
     is_grounded,
@@ -61,6 +62,11 @@ async def retrieve_all(questions: list[str]) -> list[list[DocumentChunk]]:
         # threshold=-1 表示真不过滤（源码是「similarity < threshold 就丢」）
         result = store.search(query_embedding=vec, top_k=TOP_K_POOL, threshold=-1)
         hits = result.hits
+        # 2.5：和生产用【同一个】rrf_fuse()。评测取满 100 条，稀疏也取 100 条融合 → 100，
+        # 这样只隔离「并联稀疏」一个变量（不掺生产口径里「池子 5→30」那半个），
+        # recall@k 在融合后的 100 名里算。
+        if settings.RETRIEVAL_HYBRID_ENABLED:
+            hits = rrf_fuse(hits, get_bm25_store().search(questions[i], TOP_K_POOL), TOP_K_POOL)
         # 2.2：和生产用【同一个】rerank()，否则量的不是生产行为。评测本来就取满 100 条，
         # 只在前 RERANK_CANDIDATES 条里重排 → v6→v7 精确隔离「重排」这一个变量；
         # 生产口径里「池子 5→30」那半个变量，评测里天然不掺进来。
@@ -292,9 +298,13 @@ def render(judged: list[dict], by_stratum: dict, by_threshold: dict, grounding: 
             w(f"      期望: {', '.join(j['expected'])}  (match={j['match']})")
 
         shown = j["top"][:5]
-        actual = ", ".join(
-            f"{x['filename']}@{x['similarity']:.4f}" for x in shown
-        )
+        # 稀疏独有块没有余弦相似度（similarity=None），显示成 @— 而不是崩；
+        # 它进 top-5 说明是纯 BM25 命中的，2.5 开着时才可能出现。
+        def _fmt_hit(x: dict) -> str:
+            sim = f"{x['similarity']:.4f}" if x["similarity"] is not None else "—"
+            return f"{x['filename']}@{sim}"
+
+        actual = ", ".join(_fmt_hit(x) for x in shown)
         w(f"      实际 top-5: {actual or '（无）'}")
 
         if j["refuse"]:
@@ -399,7 +409,7 @@ async def main() -> None:
 
     payload = {
         "meta": {
-            "date": "2026-10-09",
+            "date": "2026-10-10",
             "top_k_pool": TOP_K_POOL,
             "prod_top_k": PROD_TOP_K,
             "thresholds": THRESHOLDS,
@@ -412,6 +422,9 @@ async def main() -> None:
             "rerank_enabled": settings.RERANK_ENABLED,
             "rerank_model": settings.RERANK_MODEL if settings.RERANK_ENABLED else None,
             "rerank_candidates": settings.RERANK_CANDIDATES if settings.RERANK_ENABLED else None,
+            "hybrid_enabled": settings.RETRIEVAL_HYBRID_ENABLED,
+            "hybrid_rrf_k": RRF_K if settings.RETRIEVAL_HYBRID_ENABLED else None,
+            "hybrid_tokenizer": "ascii-identifier + cjk-char-bigram" if settings.RETRIEVAL_HYBRID_ENABLED else None,
             "context_max_tokens": settings.CONTEXT_MAX_TOKENS,
             "history_max_tokens": settings.HISTORY_MAX_TOKENS,
         },
@@ -428,7 +441,7 @@ async def main() -> None:
             "note": "口径 = prod top_k=5 + 2.4 预算截断，history=None；只测量不改检索，recall/grounding 应与上一版一致",
         },
     }
-    out = Path(__file__).parent / "baseline_v8.json"
+    out = Path(__file__).parent / "baseline_v9.json"
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n已写入 {out}")
 
