@@ -51,6 +51,33 @@ class LLMService:
             max_tokens=max_tokens,
         )
 
+    async def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        tool_choice: str = "auto",
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ):
+        """带工具的对话（阶段 3.1）。
+
+        与 chat() 的两个区别：
+          1. 入参是【完整 messages】，而不是 (system_prompt, user_message)——
+             工具循环需要把 assistant(含 tool_calls) / tool 结果一条条往里塞。
+          2. 返回【整条 assistant message】，而不是只回 content——调用方要靠
+             .tool_calls 决定下一步执行什么。
+
+        为什么新开方法而不改 chat()：chat() 有 4 个调用点，它们都不需要知道工具；
+        改签名会把「工具调用」这个概念泄漏到整条业务链。旧 chat() 签名与实现均不动。
+        """
+        return await self.client.chat_with_tools(
+            messages,
+            tools,
+            tool_choice=tool_choice,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
     async def chat_json(
         self,
         system_prompt: str,

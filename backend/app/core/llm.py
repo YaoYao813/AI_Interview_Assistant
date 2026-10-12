@@ -49,6 +49,39 @@ class LLMClient:
         except Exception as e:
             raise RuntimeError(f"LLM 调用失败: {e}") from e
 
+    async def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        tool_choice: str = "auto",
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ):
+        """带工具的对话（阶段 3.1）。
+
+        与 chat() 的唯一区别：chat() 只回 content，把 tool_calls 扔了；
+        这里返回【整条 assistant message】，调用方才能拿到 .tool_calls 去执行并回填。
+
+        刻意不改 chat()/chat_json()/chat_stream() 的签名——它们的调用方
+        不需要知道工具，把 tools 概念泄漏进去只会让签名变复杂。
+        """
+        kwargs: dict = {
+            "model": self.model,
+            "messages": messages,
+            "tools": tools,
+            "tool_choice": tool_choice,
+        }
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+
+        try:
+            response = await self.client.chat.completions.create(**kwargs)
+            return response.choices[0].message
+        except Exception as e:
+            raise RuntimeError(f"LLM 工具调用失败: {e}") from e
+
     async def chat_json(
         self,
         messages: list[dict],
