@@ -94,6 +94,35 @@ class RAGService:
 
     # ========== 核心 API ==========
 
+    async def retrieve(
+        self,
+        question: str,
+        top_k: int = 5,
+        threshold: float = 0.3,
+        history: list[dict] | None = None,
+    ) -> list[DocumentChunk]:
+        """纯检索：改写 → 向量 → 混合(2.5) → 重排(2.2)，返回重排后的候选块。
+
+        不做拒答判定、不做预算截断——那是「能不能答 / 喂多少」，由调用方决定。
+
+        抽出来是因为检索逻辑此前在 answer / answer_stream 里各写一份（改动必须同步
+        两处，已经在 2.5 的注释里被点名会分叉）。现在三方共用这一条路径：
+        answer、answer_stream、以及 Agent 的 search_knowledge_base 工具。
+        """
+        retrieval_query = await self._rewrite_query(question, history)  # 只影响"取回什么"
+        query_embedding = await self._embedding.embed_query(retrieval_query)  # 将问题转为向量
+        # 2.2：开启重排就多取候选（top_k → RERANK_CANDIDATES）；关 = 原样取 top_k
+        search_k = settings.RERANK_CANDIDATES if settings.RERANK_ENABLED else top_k
+        result = self._vector_store.search(
+            query_embedding=query_embedding,
+            top_k=search_k,
+            threshold=threshold,
+        )
+        # 2.5：并联稀疏一路（BM25）RRF 融合。在 rerank 之前——融合属粗排，精排要看融合后的集合。
+        hits = self._hybrid_if_enabled(retrieval_query, result.hits, search_k)
+        # 2.2：跨编码器重排。必须在拒答判定【之前】——is_grounded 看的正是最终喂给 LLM 的那几条。
+        return await self._rerank_if_enabled(retrieval_query, hits, top_k)
+
     async def answer(
         self,
         question: str,
@@ -127,22 +156,8 @@ class RAGService:
                 "token_count": 0,
             }
 
-        # 2. 查询改写 + 向量检索（内部 embedding）
-        retrieval_query = await self._rewrite_query(question, history)  # 只影响"取回什么"
-        query_embedding = await self._embedding.embed_query(retrieval_query) # 将问题转为向量
-        # 2.2：开启重排就多取候选（5 → RERANK_CANDIDATES）；关 = 原样取 top_k
-        search_k = settings.RERANK_CANDIDATES if settings.RERANK_ENABLED else top_k
-        result = self._vector_store.search( # 检索向量
-            query_embedding=query_embedding,
-            top_k=search_k,
-            threshold=threshold,
-        )
-        # 2.5：并联稀疏一路（BM25）RRF 融合。【在 rerank 之前】——融合属粗排，
-        # 精排要看到融合后的候选集。关 = 原样返回稠密结果。
-        hits = self._hybrid_if_enabled(retrieval_query, result.hits, search_k)
-        # 2.2：跨编码器重排。必须在拒答判定【之前】——is_grounded 看的正是最终
-        # 喂给 LLM 的那几条，重排会改集合成员，判定必须锚在重排后的集合上。
-        hits = await self._rerank_if_enabled(retrieval_query, hits, top_k)
+        # 2. 检索（改写 → 向量 → 混合 → 重排），唯一实现见 retrieve()
+        hits = await self.retrieve(question, top_k=top_k, threshold=threshold, history=history)
 
         # 3. 知识库答不了：0 命中，或命中了但没讲问题里的那件事（阶段 1.2 的拒答判定）
         if not hits or (
@@ -204,20 +219,8 @@ class RAGService:
             data: {"type": "done"}
 
         """
-        # 1. 查询改写 + 向量检索（改写只影响"取回什么"）
-        retrieval_query = await self._rewrite_query(question, history)
-        query_embedding = await self._embedding.embed_query(retrieval_query)
-        # 2.2：开启重排就多取候选（5 → RERANK_CANDIDATES）；关 = 原样取 top_k
-        search_k = settings.RERANK_CANDIDATES if settings.RERANK_ENABLED else top_k
-        result = self._vector_store.search(
-            query_embedding=query_embedding,
-            top_k=search_k,
-            threshold=threshold,
-        )
-        # 2.5：混合检索（与 answer() 同一条路径）
-        hits = self._hybrid_if_enabled(retrieval_query, result.hits, search_k)
-        # 2.2：重排（与 answer() 同一条路径——两个入口不能各写各的，否则会分叉）
-        hits = await self._rerank_if_enabled(retrieval_query, hits, top_k)
+        # 1. 检索（与 answer() 同一条路径——抽进 retrieve()，两个入口不再各写各的）
+        hits = await self.retrieve(question, top_k=top_k, threshold=threshold, history=history)
 
         if not hits or (
             settings.RETRIEVAL_TERM_GROUNDING and not is_grounded(question, hits)

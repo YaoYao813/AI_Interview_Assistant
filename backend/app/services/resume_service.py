@@ -246,6 +246,45 @@ class ResumeService:
         }
         return result
 
+    async def analyse_text(self, resume_text: str) -> dict:
+        """分析简历【文本】—— Agent 的 analyse_resume 工具复用。
+
+        与 analyse(file_name, file_path) 的区别：入参是已经解析好的文本，不再过
+        document_loader。Agent 拿到的是无状态请求带上的文本，没有文件可交给 load()，
+        所以需要这个纯文本入口。
+
+        刻意不改 analyse()：它是已验证的旗舰路径（POST /resume/analyse），这里只新增
+        入口；公共逻辑（_build_user_prompt / _safe_parse_json / count_tokens）照旧复用。
+        """
+        if not resume_text or len(resume_text.strip()) < 20:
+            raise ValueError("简历内容过短，请检查文件是否有效")
+
+        is_truncated = False
+        if len(resume_text) > self.MAX_RESUME_LENGTH:
+            resume_text = resume_text[:self.MAX_RESUME_LENGTH]
+            is_truncated = True
+
+        user_prompt = self._build_user_prompt(resume_text, is_truncated)
+        try:
+            raw_response = await self._llm.chat(
+                system_prompt=RESUME_ANALYSIS_SYSTEM_PROMPT,
+                user_message=user_prompt,
+                temperature=0.3,
+                max_tokens=3000,
+            )
+        except Exception as e:
+            raise RuntimeError(f"AI 服务调用失败: {e}")
+
+        result = _safe_parse_json(raw_response)
+        result["_meta"] = {
+            "filename": "",  # 文本入口没有文件名
+            "resume_length": len(resume_text),
+            "is_truncated": is_truncated,
+            "token_estimate": self._llm.count_tokens(resume_text),
+            "resume_text": resume_text,
+        }
+        return result
+
     async def analyze_from_bytes(self, file_bytes: bytes, filename: str) -> dict:
         """从字节流分析简历（API 层直接调用）
 

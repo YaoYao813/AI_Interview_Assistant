@@ -189,6 +189,15 @@ class InterviewService:
         evaluation = await self._evaluate_answer(question, answer)
         return await self._persist_evaluation(session_id, session, evaluation, answer)
 
+    async def evaluate_answer(self, question: str, answer: str) -> dict:
+        """公开的【纯评价】入口（无副作用），供 Agent 的 evaluate_answer 工具复用。
+
+        与 evaluate(session_id, answer) 的区别：不需要会话、不落库、不推进面试进度，
+        只对 (题目, 回答) 打分并返回 {score, feedback, model_answer}。
+        evaluate() 内部同样走 _evaluate_answer，行为一行未变。
+        """
+        return await self._evaluate_answer(question, answer)
+
     async def prepare_evaluate_stream(
         self, session_id: str, answer: str
     ) -> AsyncGenerator[str, None]:
