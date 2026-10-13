@@ -23,3 +23,15 @@ backend/data/
 
 # Claude Code 本地配置
 .claude/
+
+# 个人笔记 / 内部规划（不进仓库）
+面试笔记.txt
+项目优化.txt
+后续开发规划.txt
+定义.txt
+初始化脚本.txt
+技术设计文档 v1.txt
+架构图.txt
+项目总控 Prompt.txt
+PROJECT.md
+OPTIMIZATION_PLAN.md

@@ -8,6 +8,7 @@
       <el-slider v-model="threshold" :min="0" :max="1" :step="0.05" style="width: 100px" />
       <span class="threshold-value">{{ threshold }}</span>
     </div>
+
     <div class="chat-input-row">
       <el-input
         v-model="question"
