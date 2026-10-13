@@ -9,6 +9,7 @@ FastAPI 的 Depends() 机制：
 from fastapi import Depends, Request
 
 from app.repositories.cache import CacheRepository
+from app.services.agent_service import AgentService
 from app.services.knowledge_service import get_knowledge_service, KnowledgeService
 from app.services.rag_service import get_rag_service, RAGService
 from app.services.resume_service import ResumeService, get_resume_service
@@ -50,3 +51,15 @@ def get_learning_svc(cache: CacheRepository = Depends(get_cache)) -> LearningSer
 def get_interview_svc(cache: CacheRepository = Depends(get_cache)) -> InterviewService:
     """注入 InterviewService（依赖 Redis 缓存）"""
     return InterviewService(cache=cache)
+
+
+def get_agent_svc(interview: InterviewService = Depends(get_interview_svc)) -> AgentService:
+    """注入 AgentService——【每个请求新建】。
+
+    为什么不用单例（对比 get_learning_svc 只在单例上挂 cache）：AgentService 会跑
+    一个跨 await 的循环，只要有任何请求级数据（resume_text / session_id）落到 self，
+    并发请求就会在 await 让出时互相覆盖（跨用户串号）。现在数据全靠闭包/参数传，
+    新建对象让「不进 self」成为结构上不可能违反的事。三个重依赖（LLM/RAG/Resume）
+    仍是单例，新建的只是薄壳，成本可忽略。
+    """
+    return AgentService(interview=interview)

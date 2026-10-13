@@ -108,7 +108,7 @@ class AgentService:
             history: 历史消息 [{"role": "user"/"assistant", "content": "..."}]
 
         Returns:
-            {"answer": str, "steps": [...], "stopped": "done" | "max_steps"}
+            {"answer": str, "steps": [...], "stopped": "done" | "max_steps" | "error"}
         """
         messages: list[dict] = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
         messages.extend(history or [])
@@ -120,7 +120,12 @@ class AgentService:
         msg = None
 
         for step in range(MAX_STEPS):
-            msg = await self._llm.chat_with_tools(messages, TOOLS) # 调用chat_with_tools就可以知道需不需要调用工具
+            try:
+                msg = await self._llm.chat_with_tools(messages, TOOLS)  # 调用chat_with_tools就可以知道需不需要调用工具
+            except Exception:
+                # 与 RAG 的 answer() 同款：LLM 是全项目底层，挂了就优雅降级，不 500
+                logger.exception("Agent 调用 LLM 失败")
+                return {"answer": "AI 服务暂时不可用，请稍后重试。", "steps": steps, "stopped": "error"}
 
             # 没有 tool_calls → 这就是最终答案
             if not msg.tool_calls:
