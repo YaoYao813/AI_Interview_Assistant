@@ -1,0 +1,672 @@
+{
+  "meta": {
+    "date": "2026-10-14",
+    "model": "deepseek-chat",
+    "temperature": 0.0,
+    "question_count": 31,
+    "chunk_count": 2898,
+    "questions_version": 5,
+    "repeat": 3,
+    "expectation": "31 题全为技术题，期望都调 search_knowledge_base；8 道 refuse 题额外期望命中拒答分支",
+    "note": "agent 仪器：真调 LLM、有随机性、花钱；与 run_eval.py 的检索仪器互不相干"
+  },
+  "by_run": [
+    {
+      "n": 31,
+      "tool_call_rate": 0.7742,
+      "positives": {
+        "n": 23,
+        "call_rate": 0.6957
+      },
+      "refuse": {
+        "n": 8,
+        "call_rate": 1.0,
+        "hit_refuse_branch": 6,
+        "hit_rate": 0.75,
+        "ids_hit": [
+          "E01",
+          "E02",
+          "E04",
+          "E05",
+          "E06",
+          "E08"
+        ],
+        "ids_miss": [
+          "E03",
+          "E07"
+        ]
+      },
+      "termination": {
+        "done": 31,
+        "max_steps": 0,
+        "error": 0,
+        "done_rate": 1.0
+      },
+      "steps_histogram": {
+        "0": 7,
+        "1": 23,
+        "2": 1
+      },
+      "by_stratum": {
+        "single_doc": {
+          "n": 8,
+          "call_rate": 1.0
+        },
+        "term": {
+          "n": 5,
+          "call_rate": 1.0
+        },
+        "multi_doc": {
+          "n": 3,
+          "call_rate": 1.0
+        },
+        "multi_turn": {
+          "n": 4,
+          "call_rate": 0.0
+        },
+        "multi_turn_cued": {
+          "n": 3,
+          "call_rate": 0.0
+        },
+        "refuse": {
+          "n": 8,
+          "call_rate": 1.0
+        }
+      }
+    },
+    {
+      "n": 31,
+      "tool_call_rate": 0.7742,
+      "positives": {
+        "n": 23,
+        "call_rate": 0.6957
+      },
+      "refuse": {
+        "n": 8,
+        "call_rate": 1.0,
+        "hit_refuse_branch": 6,
+        "hit_rate": 0.75,
+        "ids_hit": [
+          "E01",
+          "E02",
+          "E04",
+          "E05",
+          "E06",
+          "E08"
+        ],
+        "ids_miss": [
+          "E03",
+          "E07"
+        ]
+      },
+      "termination": {
+        "done": 31,
+        "max_steps": 0,
+        "error": 0,
+        "done_rate": 1.0
+      },
+      "steps_histogram": {
+        "0": 7,
+        "1": 21,
+        "2": 3
+      },
+      "by_stratum": {
+        "single_doc": {
+          "n": 8,
+          "call_rate": 1.0
+        },
+        "term": {
+          "n": 5,
+          "call_rate": 1.0
+        },
+        "multi_doc": {
+          "n": 3,
+          "call_rate": 1.0
+        },
+        "multi_turn": {
+          "n": 4,
+          "call_rate": 0.0
+        },
+        "multi_turn_cued": {
+          "n": 3,
+          "call_rate": 0.0
+        },
+        "refuse": {
+          "n": 8,
+          "call_rate": 1.0
+        }
+      }
+    },
+    {
+      "n": 31,
+      "tool_call_rate": 0.8065,
+      "positives": {
+        "n": 23,
+        "call_rate": 0.7391
+      },
+      "refuse": {
+        "n": 8,
+        "call_rate": 1.0,
+        "hit_refuse_branch": 6,
+        "hit_rate": 0.75,
+        "ids_hit": [
+          "E01",
+          "E02",
+          "E04",
+          "E05",
+          "E06",
+          "E08"
+        ],
+        "ids_miss": [
+          "E03",
+          "E07"
+        ]
+      },
+      "termination": {
+        "done": 31,
+        "max_steps": 0,
+        "error": 0,
+        "done_rate": 1.0
+      },
+      "steps_histogram": {
+        "0": 6,
+        "1": 23,
+        "2": 2
+      },
+      "by_stratum": {
+        "single_doc": {
+          "n": 8,
+          "call_rate": 1.0
+        },
+        "term": {
+          "n": 5,
+          "call_rate": 1.0
+        },
+        "multi_doc": {
+          "n": 3,
+          "call_rate": 1.0
+        },
+        "multi_turn": {
+          "n": 4,
+          "call_rate": 0.25
+        },
+        "multi_turn_cued": {
+          "n": 3,
+          "call_rate": 0.0
+        },
+        "refuse": {
+          "n": 8,
+          "call_rate": 1.0
+        }
+      }
+    }
+  ],
+  "per_question": [
+    {
+      "id": "A01",
+      "stratum": "single_doc",
+      "refuse": false,
+      "question": "ArrayList 的扩容机制是怎样的？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# ArrayList 的扩容机制\n\n## 核心结论\n\nArrayList 每次扩容后的容量约为**原来的 1.5 倍**（oldCapacity 为偶数时正好 1.5 倍，为奇数时会丢掉小数，是 1.5 倍左右）。\n\n## 扩容的触发链路\n\n调用 `add()` 时，会依次经过：\n\n```\nadd() → ensureCapacityInternal() → ensureExplicitCapa"
+    },
+    {
+      "id": "A02",
+      "stratum": "single_doc",
+      "refuse": false,
+      "question": "HashMap 的底层数据结构在 JDK1.8 前后有什么变化？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# HashMap 底层数据结构：JDK1.8 前后的变化\n\n## JDK1.8 之前：数组 + 链表\n\n底层是**数组 + 链表**的组合，也就是所谓的**「拉链法」**：\n\n- 数组是 HashMap 的主体，每一格（桶 bucket）就是一个链表；\n- 遇到哈希冲突时，把冲突的值追加到链表中即可。\n\n这个阶段链表查询效率是 **O(n)**，当冲突严重、链表很长时，查询性能会明显下降。\n\n#"
+    },
+    {
+      "id": "A03",
+      "stratum": "single_doc",
+      "refuse": false,
+      "question": "BigDecimal 为什么不能直接用 equals 做等值比较？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# BigDecimal 为什么不能直接用 equals 做等值比较？\n\n核心原因：**`equals()` 不仅比较数值大小（value），还会比较精度（scale）**，而 `compareTo()` 只比较数值大小、忽略精度。\n\n## 一个典型例子\n\n```java\nBigDecimal a = new BigDecimal(\"1\");\nBigDecimal b = new BigDecim"
+    },
+    {
+      "id": "A04",
+      "stratum": "single_doc",
+      "refuse": false,
+      "question": "为什么说 Java 只有值传递，没有引用传递？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# Java 为什么只有值传递，没有引用传递\n\n## 先明确两个概念\n\n**形参 & 实参**：实参是调用方法时真正传入的值，形参是方法定义里接收参数的变量。\n\n**值传递 & 引用传递**（程序设计语言传递实参的两种方式）：\n- **值传递**：方法接收的是实参值的**拷贝**，会创建副本。\n- **引用传递**：方法接收的直接是实参的**地址**（即指针），此时形参就是实参，对形参的任何修改（"
+    },
+    {
+      "id": "A05",
+      "stratum": "single_doc",
+      "refuse": false,
+      "question": "JVM 堆内存的分配和回收原则是什么？对象优先分配在哪里？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# JVM 堆内存的分配与回收原则\n\n## 一、对象优先分配在哪里？\n\n**大多数情况下，对象在新生代的 Eden 区分配。** 当 Eden 区没有足够空间进行分配时，虚拟机会发起一次 **Minor GC**。\n\n## 二、对象在堆中的流转过程\n\n1. **Eden 出生**：对象首先在 Eden 区分配。\n2. **进入 Survivor**：如果对象在 Eden 出生并经过第一次 Mino"
+    },
+    {
+      "id": "A06",
+      "stratum": "single_doc",
+      "refuse": false,
+      "question": "MySQL 的两阶段提交是怎么做的？redo log 和 binlog 怎么保证一致？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# MySQL 两阶段提交与 redo log / binlog 一致性\n\n## 为什么需要两阶段提交\n\nredo log 和 binlog 是两份独立的日志，写入时机不同：\n\n- **redo log**：InnoDB 引擎层，让 InnoDB 拥有崩溃恢复能力，在事务执行过程中可以不断写入。\n- **binlog**：Server 层，保证 MySQL 集群架构（主从、备份）的数据一致性，只有"
+    },
+    {
+      "id": "A07",
+      "stratum": "single_doc",
+      "refuse": false,
+      "question": "如何实现一个高效的单向链表逆序输出？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# 单向链表逆序输出\n\n这道题是阿里巴巴的面试题（出题人：昀龙／阿里云弹性人工智能负责人）。核心思路是**原地反转链表指针，再顺序输出**，时间复杂度 O(n)、空间复杂度 O(1)。\n\n## 参考实现（C++）\n\n```cpp\ntypedef struct node{\n    int           data;\n    struct node*  next;\n    node(int d):"
+    },
+    {
+      "id": "A08",
+      "stratum": "single_doc",
+      "refuse": false,
+      "question": "给定一个二叉搜索树(BST)，如何找到树中第 K 小的节点？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# 二叉搜索树中第 K 小的节点\n\n## 核心思路\n\n利用 **BST 的中序遍历是有序（升序）序列** 这一特性：中序遍历结果中的第 K 个元素就是答案。\n\n## 解法一：中序遍历 + 计数提前退出\n\n不需要完整遍历整棵树，用一个计数器记录已访问节点数，访问到第 K 个就立即返回。\n\n**关键点：**\n- 每个节点最多被遍历 1 次\n- 最坏情况是 K 节点为 BST 最右叶子节点，此时复杂度为"
+    },
+    {
+      "id": "B01",
+      "stratum": "term",
+      "refuse": false,
+      "question": "ConcurrentHashMap 1.8 的 size 计数是怎么实现的？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "ConcurrentHashMap 1.8 的 size 计数采用的是**分段计数（分散热点）**的设计，核心是 `baseCount` + `counterCells` 两个字段。\n\n## 为什么需要分段计数\n\n并发场景下多个线程同时 put 都要更新总数。如果只用一个共享计数器，所有线程争抢同一个变量，竞争会非常激烈，严重影响性能。所以 CHM 借鉴\"银行多开窗口分流\"的思路，把计数分散到多个"
+    },
+    {
+      "id": "B02",
+      "stratum": "term",
+      "refuse": false,
+      "question": "DelayQueue 的实现原理是什么？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# DelayQueue 实现原理\n\nDelayQueue 是 JUC（`java.util.concurrent`）包提供的**延迟队列**，用于实现延时任务，比如「订单下单 15 分钟未支付自动取消」。它是 `BlockingQueue` 的一种，底层基于 `PriorityQueue` 实现，是一个**线程安全的无界阻塞队列**，最早在 Java 5 引入。\n\n## 核心组成\n\n| 组件 |"
+    },
+    {
+      "id": "B03",
+      "stratum": "term",
+      "refuse": false,
+      "question": "MySQL 的 innodb_flush_log_at_trx_commit 取 0、1、2 分别是什么行为？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "`innodb_flush_log_at_trx_commit` 控制的是**事务提交时 redo log 的刷盘策略**，三个取值的行为如下：\n\n## 0：每次事务提交时不进行刷盘操作\n- 事务提交时**不做任何刷盘动作**，redo log 只留在 `redo log buffer` 里。\n- 性能最高，但**最不安全**：如果 MySQL 挂了或宕机，可能会丢失最近 **1 秒**内的事务。"
+    },
+    {
+      "id": "B04",
+      "stratum": "term",
+      "refuse": false,
+      "question": "MySQL 的 MVCC 里 ReadView 是怎么判断一条数据可不可见的？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# MySQL MVCC 中 ReadView 的可见性判断\n\n## 一、ReadView 的核心字段\n\nInnoDB 的 `ReadView` 类主要保存了「当前对本事务不可见的其他活跃事务」信息，关键字段有：\n\n| 字段 | 含义 |\n|---|---|\n| `m_ids` | 创建 ReadView 时**其他未提交的活跃事务 ID 列表**（不含当前事务自己和已提交事务） |\n| `m_u"
+    },
+    {
+      "id": "B05",
+      "stratum": "term",
+      "refuse": false,
+      "question": "Java NIO 的零拷贝是怎么实现的？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# Java NIO 的零拷贝实现\n\n## 什么是零拷贝\n\n零拷贝（Zero-Copy）是提升 IO 操作性能的常用手段，像 ActiveMQ、Kafka、RocketMQ、QMQ、Netty 等顶级开源项目都用到了它。\n\n它的核心含义是：**计算机执行 IO 操作时，CPU 不需要将数据从一个存储区域复制到另一个存储区域**，从而减少上下文切换以及 CPU 的拷贝时间。也就是说，零拷贝主要解决操"
+    },
+    {
+      "id": "C01",
+      "stratum": "multi_turn",
+      "refuse": false,
+      "question": "那 1.7 里是怎么做的？",
+      "has_history": true,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "知识库里目前只有 1.8 的分段计数（baseCount + counterCells）以及 1.7 的初始化逻辑（Segment 数组、segmentShift/segmentMask、segments[0] 默认容量 2 等），**没有检索到 1.7 中 size 计数具体实现的资料**，所以这部分我无法依据知识库作答。\n\n从检索到的 1.7 初始化片段可以确认的只有：1.7 是 Segmen"
+    },
+    {
+      "id": "C02",
+      "stratum": "multi_turn_cued",
+      "refuse": false,
+      "question": "那它的默认初始容量是多少？",
+      "has_history": true,
+      "called_tools": [],
+      "called_search": false,
+      "search_refused": false,
+      "steps": 0,
+      "stopped": "done",
+      "answer": "默认初始容量是 10。\n\n不过要注意一个细节：这个 10 并不是在 `new ArrayList()` 时就分配的，而是**第一次 add 元素时**才真正把底层数组扩到 10。在此之前，`new ArrayList<>()` 用的是共享的空数组（`DEFAULTCAPACITY_EMPTY_ELEMENTDATA`），所以刚创建时并没有占用 10 个元素的容量。\n\n补充几个相关点：\n\n- **`"
+    },
+    {
+      "id": "C03",
+      "stratum": "multi_turn_cued",
+      "refuse": false,
+      "question": "那它在什么情况下会失效？",
+      "has_history": true,
+      "called_tools": [],
+      "called_search": false,
+      "search_refused": false,
+      "steps": 0,
+      "stopped": "done",
+      "answer": "（冻结的固定桩文本）索引失效的典型场景：对索引列做函数运算或隐式类型转换、以 % 开头的 LIKE、违反最左前缀原则、OR 连接非索引列、以及优化器估算全表扫描更便宜时。"
+    },
+    {
+      "id": "C04",
+      "stratum": "multi_turn_cued",
+      "refuse": false,
+      "question": "那它是怎么把 Leader 选出来的？",
+      "has_history": true,
+      "called_tools": [],
+      "called_search": false,
+      "search_refused": false,
+      "steps": 0,
+      "stopped": "done",
+      "answer": "（冻结的固定桩文本）ZAB 协议：先自增 epoch，再选 zxid 最大的节点当 Leader，多数派投票确认。"
+    },
+    {
+      "id": "C05",
+      "stratum": "multi_turn",
+      "refuse": false,
+      "question": "那它俩分别用在哪些类里？",
+      "has_history": true,
+      "called_tools": [],
+      "called_search": false,
+      "search_refused": false,
+      "steps": 0,
+      "stopped": "done",
+      "answer": "（冻结的固定桩文本，不是模型实时输出）独占模式的典型实现是 ReentrantLock、ReentrantReadWriteLock 的写锁；共享模式的典型实现是 Semaphore、CountDownLatch，以及 ReentrantReadWriteLock 的读锁。"
+    },
+    {
+      "id": "C06",
+      "stratum": "multi_turn",
+      "refuse": false,
+      "question": "那它读取的时候要加锁吗？",
+      "has_history": true,
+      "called_tools": [],
+      "called_search": false,
+      "search_refused": false,
+      "steps": 0,
+      "stopped": "done",
+      "answer": "（冻结的固定桩文本，不是模型实时输出）不需要。读操作直接读取底层数组的当前引用，不加锁，所以读性能很高；代价是写操作要复制整个数组，开销大，且读到的可能是旧快照。"
+    },
+    {
+      "id": "C07",
+      "stratum": "multi_turn",
+      "refuse": false,
+      "question": "那它内部是用什么结构存的？",
+      "has_history": true,
+      "called_tools": [],
+      "called_search": false,
+      "search_refused": false,
+      "steps": 0,
+      "stopped": "done",
+      "answer": "（冻结的固定桩文本，不是模型实时输出）每个 Thread 内部有一个 ThreadLocalMap，key 是 ThreadLocal 本身（弱引用），value 是变量副本，底层是开放地址法实现的数组。"
+    },
+    {
+      "id": "D01",
+      "stratum": "multi_doc",
+      "refuse": false,
+      "question": "线程池的四种拒绝策略分别适合什么场景？CallerRunsPolicy 能当背压用吗？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# 线程池四种拒绝策略的适用场景\n\n## 四种内置策略\n\n| 策略 | 行为 | 适合场景 |\n|---|---|---|\n| **AbortPolicy**（默认） | 直接抛 `RejectedExecutionException` | 对任务丢失零容忍的核心业务（支付、转账）。调用方必须捕获异常并做补偿（重试 / 落库后补偿）。《阿里巴巴 Java 开发手册》强调队列满会直接抛异常，开发者必"
+    },
+    {
+      "id": "D02",
+      "stratum": "multi_doc",
+      "refuse": false,
+      "question": "用 Redis 和用 Zookeeper 实现分布式锁，各自是怎么做的？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base",
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 2,
+      "stopped": "done",
+      "answer": "# Redis 与 Zookeeper 实现分布式锁的对比\n\n## 一、Redis 实现分布式锁\n\n**核心思路**：利用 Redis 的原子命令在共享的键值存储上\"抢占\"一个 key，抢到即持有锁。\n\n- **基础做法**：用 `SETNX`（SET if Not eXists）尝试创建锁 key，创建成功即获得锁；用完 `DEL` 释放。为避免死锁，需要配合 `EXPIRE` 设置过期时间。更"
+    },
+    {
+      "id": "D03",
+      "stratum": "multi_doc",
+      "refuse": false,
+      "question": "MySQL 的事务隔离级别有哪些？MVCC 在 RC 和 RR 下有什么不同表现？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "# MySQL 事务隔离级别与 MVCC 在 RC / RR 下的差异\n\n## 一、四种事务隔离级别\n\nMySQL 的隔离级别基于**锁**和 **MVCC** 机制共同实现：\n\n| 隔离级别 | 说明 |\n|---|---|\n| **READ-UNCOMMITTED（读未提交）** | 最低级别，可以读到其他事务未提交的数据 |\n| **READ-COMMITTED（读已提交，RC）** | 只"
+    },
+    {
+      "id": "E01",
+      "stratum": "refuse",
+      "refuse": true,
+      "question": "Kubernetes 的 Pod 调度策略有哪些？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": true,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "抱歉，知识库中没有关于 Kubernetes Pod 调度策略的相关资料，我无法依据知识库为你回答这个问题。\n\n如果你希望，我可以：\n- 换一个角度检索（比如「Kubernetes 调度器」「节点亲和性」等具体关键词），看知识库里是否有相邻内容；\n- 或者你提供一份简历，我帮你分析背景并据此设计相关的面试题。\n\n需要我怎么做？"
+    },
+    {
+      "id": "E02",
+      "stratum": "refuse",
+      "refuse": true,
+      "question": "ClickHouse 的 MergeTree 引擎是怎么做数据合并的？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": true,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "抱歉，我检索了本地知识库，**没有找到与「ClickHouse MergeTree 引擎数据合并机制」相关的资料**，所以无法基于知识库给你一个可靠的回答。\n\n如果你希望我继续帮忙，可以试试：\n\n1. **换个角度提问** —— 比如你实际关心的是「ClickHouse 的写入/查询原理」「LSM 树类存储引擎的合并思路」等，我可以再检索一次，看知识库里是否有相邻主题的资料。\n2. **补充上下文"
+    },
+    {
+      "id": "E03",
+      "stratum": "refuse",
+      "refuse": true,
+      "question": "雪花算法的具体实现是怎样的？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "知识库里没有关于雪花算法（Snowflake）的资料——检索返回的都是二分搜索树、ThreadLocal、AQS 等无关内容，所以我无法依据知识库来回答这个具体实现问题。\n\n如果你希望我基于知识库作答，可以换个方向提问，比如：\n\n- **分布式 ID / 唯一 ID 生成**相关的其他方案（如果知识库里有的话，我可以再帮你检索一次）\n- **Redis、ThreadLocal、AQS、Reentr"
+    },
+    {
+      "id": "E04",
+      "stratum": "refuse",
+      "refuse": true,
+      "question": "Grafana 的告警规则怎么做分级？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base",
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": true,
+      "steps": 2,
+      "stopped": "done",
+      "answer": "我查了本地知识库，**没有找到与「Grafana 告警规则分级」相关的资料**，所以这个问题我无法依据知识库给你可靠回答。\n\n如果你希望我基于知识库来回答，可以换个角度试试，比如：\n\n- 你实际想解决的是哪一层的问题？是**告警严重级别（severity）怎么定义**、**通知渠道怎么按级别路由**，还是**告警抑制/静默**？\n- 或者你手头有相关的内部文档/规范，可以贴给我，我基于它来帮你梳理"
+    },
+    {
+      "id": "E05",
+      "stratum": "refuse",
+      "refuse": true,
+      "question": "HBase 的 RowKey 设计要注意什么？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": true,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "抱歉，我检索了本地知识库，**没有找到与「HBase RowKey 设计」相关的资料**，所以无法基于知识库给你一个有依据的回答。\n\n如果你希望我继续帮你，可以试试：\n\n1. **换个问法再检索**——比如你其实想问的是某个具体方向（如「HBase 热点问题」「HBase 预分区」），我可以再查一次，看知识库里是否有相邻主题的内容。\n2. **提供你的简历**——如果这是针对你个人面试准备的，我可"
+    },
+    {
+      "id": "E06",
+      "stratum": "refuse",
+      "refuse": true,
+      "question": "Jenkins 的流水线怎么配置多阶段部署？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": true,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "抱歉，我检索了本地知识库，**没有找到与「Jenkins 流水线多阶段部署配置」相关的资料**，所以无法基于知识库给你可靠的回答。\n\n如果你希望我继续帮忙，可以试试：\n\n1. **换个角度提问** —— 比如你实际关心的是「CI/CD 流水线设计」「多环境（dev/staging/prod）发布策略」这类更偏概念和面试考点的问题，我可以再查一次知识库看有没有对应内容。\n2. **提供你的简历** "
+    },
+    {
+      "id": "E07",
+      "stratum": "refuse",
+      "refuse": true,
+      "question": "领域驱动设计里的聚合根和限界上下文是什么？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": false,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "知识库里没有关于领域驱动设计（DDD）的资料——检索返回的都是 LLM 上下文窗口、限流、Java 锁、评测取样等无关内容，没有命中「聚合根」「限界上下文」的任何片段。\n\n所以这个问题我无法依据知识库回答。如果你希望我按通用知识来讲，可以明确告诉我；或者你也可以换个知识库里有覆盖的方向提问。"
+    },
+    {
+      "id": "E08",
+      "stratum": "refuse",
+      "refuse": true,
+      "question": "Redis 的 RedLock 红锁算法是怎么保证分布式锁安全性的？",
+      "has_history": false,
+      "called_tools": [
+        "search_knowledge_base"
+      ],
+      "called_search": true,
+      "search_refused": true,
+      "steps": 1,
+      "stopped": "done",
+      "answer": "抱歉，我检索了本地知识库，**没有找到与 Redis RedLock 红锁算法相关的资料**，所以无法基于知识库为你回答这个问题。\n\n如果你希望，我可以：\n- 换一个角度检索（比如「Redis 分布式锁」「SETNX 实现锁」等关键词），看看知识库里是否有相邻主题的内容；\n- 或者你把简历发给我，我帮你分析背景并设计相关的面试追问。\n\n需要我试试其他关键词吗？"
+    }
+  ],
+  "stability": {
+    "runs": 3,
+    "stable_call": 30,
+    "flaky_call_ids": [
+      "C01"
+    ],
+    "stable_refuse": 30,
+    "flaky_refuse_ids": [
+      "D03"
+    ]
+  }
+}

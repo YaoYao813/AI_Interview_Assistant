@@ -13,6 +13,8 @@ import asyncio
 import json
 import logging
 
+from app.core.config import settings
+from app.repositories.base_vector_store import is_grounded
 from app.services.interview_service import InterviewService
 from app.services.llm_service import LLMService, get_llm_service
 from app.services.rag_service import RAGService, get_rag_service
@@ -32,7 +34,8 @@ AGENT_SYSTEM_PROMPT = """你是 AI 面试助手。你可以调用工具来更准
 - 需要给用户的回答打分点评时，调用 evaluate_answer。
 - 寒暄、纯闲聊、或当前上下文已足够回答时，不要调用任何工具，直接回答。
 
-调用工具后，请基于工具返回的结果组织最终回答，不要编造工具没提供的信息。"""
+调用工具后，请基于工具返回的结果组织最终回答，不要编造工具没提供的信息。
+如果 search_knowledge_base 明确返回「知识库中没有相关信息」，请如实告知用户知识库无法回答该问题，不要凭自己的知识作答。"""
 
 
 # ========== 工具 schema（阶段 3.2 定稿，2–4 个为宜）==========
@@ -114,7 +117,7 @@ class AgentService:
         messages.extend(history or [])
         messages.append({"role": "user", "content": message})
 
-        impls = self._build_tools(resume_text)  # ★闭包捕获请求级状态
+        impls = self._build_tools(message, resume_text)  # ★闭包捕获请求级状态
         seen: set[str] = set()                  # 重复调用检测：tool + arguments
         steps: list[dict] = []
         msg = None
@@ -183,12 +186,13 @@ class AgentService:
             logger.exception("工具 %s 执行失败", tc.function.name)
             return f"工具执行失败：{e}"
 
-    def _build_tools(self, resume_text: str | None) -> dict:
+    def _build_tools(self, message: str, resume_text: str | None) -> dict:
         """构建本次请求的工具实现。
 
-        resume_text 用闭包捕获——它是本次 run() 的局部变量，别的并发请求够不着它，
-        所以简历不可能串号。工具函数体只负责把模型给的参数「转换 + 补全」成下游
-        方法要的形态，模型永远看不到、也传不了 resume_text 本身。
+        message / resume_text 用闭包捕获——它们都是本次 run() 的局部变量，别的并发
+        请求够不着，所以不可能串号。工具函数体只负责把模型给的参数「转换 + 补全」
+        成下游方法要的形态，模型永远看不到、也传不了 message / resume_text 本身。
+        message 只用于拒答判定（见下），不作为工具参数暴露给模型。
         """
 
         async def search_knowledge_base(query: str, top_k: int = 5) -> str:
@@ -197,8 +201,13 @@ class AgentService:
             except (TypeError, ValueError):
                 top_k = 5
             hits = await self._rag.retrieve(query, top_k=top_k)
-            if not hits:
-                return "未检索到相关内容。"
+            # 拒答闸门：与 /rag/chat 的 answer() 用同一把尺子（is_grounded + 同一个开关）。
+            # 判据用【原始 message】而非模型改写的 query——改写只影响「取回什么」，
+            # 「能不能答」要看用户到底问了什么，与 answer() 用原问句同源。
+            if not hits or (
+                settings.RETRIEVAL_TERM_GROUNDING and not is_grounded(message, hits)
+            ):
+                return "知识库中没有与该问题相关的信息，请如实告知用户无法从知识库回答。"
             payload = [
                 {
                     "content": h.content,
