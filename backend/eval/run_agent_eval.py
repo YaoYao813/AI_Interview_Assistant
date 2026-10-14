@@ -50,7 +50,7 @@ from eval.run_eval import STRATUM_ORDER, load_test_set              # noqa: E402
 
 EVAL_TEMPERATURE = 0.0
 REFUSE_MARKER = "知识库中没有"   # search_knowledge_base 的拒答分支开头，必须与 agent_service 一致
-OUT_FILE = Path(__file__).parent / "agent_baseline_v2.json"
+OUT_FILE = Path(__file__).parent / "agent_baseline_v3.json"
 
 
 class PinnedLLM:
@@ -268,6 +268,7 @@ async def main() -> None:
             "chunk_count": actual,
             "questions_version": test_set["meta"]["version"],
             "repeat": repeat,
+            "system_prompt_variant": "技术事实必检索（即使历史聊过）；仅寒暄/身份/闲聊不检索",
             "expectation": "31 题全为技术题，期望都调 search_knowledge_base；8 道 refuse 题额外期望命中拒答分支",
             "note": "agent 仪器：真调 LLM、有随机性、花钱；与 run_eval.py 的检索仪器互不相干",
         },
