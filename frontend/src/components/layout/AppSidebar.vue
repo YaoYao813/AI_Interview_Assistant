@@ -45,6 +45,7 @@ const allMenu = [
   { path: '/knowledge', icon: 'chat', label: '知识问答', roles: ['user', 'admin'] },
   { path: '/resume', icon: 'file', label: '简历分析', roles: ['user', 'admin'] },
   { path: '/interview', icon: 'mic', label: '模拟面试', roles: ['user', 'admin'] },
+  { path: '/interview/agent', icon: 'sparkles', label: '动态追问面试', roles: ['user', 'admin'] },
   { path: '/learning', icon: 'map', label: '学习路线', roles: ['user', 'admin'] },
   { path: '/admin/knowledge', icon: 'settings', label: '知识库管理', roles: ['admin'] },
 ]
@@ -54,7 +55,12 @@ const visibleMenu = computed(() =>
 )
 
 function isActive(path) {
-  return path === '/' ? route.path === '/' : route.path.startsWith(path)
+  // 取「最长命中」：/interview 与 /interview/agent 是前缀关系，
+  // 简单 startsWith 会让两个导航项同时高亮。
+  const matched = allMenu
+    .filter(item => route.path === item.path || route.path.startsWith(item.path + '/'))
+    .sort((a, b) => b.path.length - a.path.length)[0]
+  return matched?.path === path
 }
 
 function toggleRole() {

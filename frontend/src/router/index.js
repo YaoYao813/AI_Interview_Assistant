@@ -23,6 +23,11 @@ const routes = [
     component: () => import('../views/MockInterview.vue'),
   },
   {
+    path: '/interview/agent',
+    name: 'AgentInterview',
+    component: () => import('../views/AgentInterview.vue'),
+  },
+  {
     path: '/learning',
     name: 'LearningPath',
     component: () => import('../views/LearningPath.vue'),
