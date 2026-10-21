@@ -1,0 +1,454 @@
+{
+  "meta": {
+    "version": "interview-cases-v1",
+    "date": "2026-10-21",
+    "resume_excerpt": "姚壮旺 | RAG/AI 应用开发 | 深圳大学 计算机科学与技术（本科）\n技能：RAG / 向量检索（ChromaDB、HNSW 近似检索、recall@k / MRR 评测）；LLM 应用（Prompt 工程、SSE 流式）；Python 后端（FastAPI、Redis）；Java（Spring Boot、Spring Cloud Alibaba、RabbitMQ）\n项目：AI Interview Assistant —— 自建 31 题检索评测集、拒答判定下沉检索层、history-aware 多轮查询改写、引用溯源\n项目：FlashMall 高并发秒杀 —— Redis Lua 预减库存、RabbitMQ 异步削峰、Redisson 分布式锁、MySQL 乐观锁",
+    "note": "KB 片段冻结在每条 case 里：决策评测不做检索、不依赖语料快照，与 31 题 agent 仪器互不相干。",
+    "decision_prompt": "DECISION_SYSTEM_PROMPT（阶段 4 定稿）"
+  },
+  "cases": [
+    {
+      "id": "intro-cap0",
+      "phase": "intro",
+      "question": "请先做一个 1-2 分钟的自我介绍，重点讲讲你的技术背景和最近做过的项目。",
+      "candidate_answer": "面试官好，我是姚壮旺，深圳大学计算机科学与技术专业。我的技术方向是 RAG 和 AI 应用开发，最近在做 AI Interview Assistant，做了知识库检索、评测和拒答；之前也用 Spring Cloud Alibaba 做过一个高并发的秒杀系统。",
+      "followups_used": 0,
+      "cap": 0,
+      "total_asked": 1,
+      "kb_snippets": [],
+      "topics": {
+        "fundamentals_topics": [
+          "说说 JVM 的分代回收机制，新生代和老年代分别用什么回收算法？",
+          "Spring Boot 的自动配置是怎么生效的？",
+          "MySQL 为什么用 B+ 树做索引，而不是 B 树或哈希？"
+        ],
+        "project_topics": [
+          "讲讲你项目里 RAG 从用户提问到返回答案的完整链路。",
+          "如果让你重新设计这个面试 Agent 的追问决策，你会怎么保证它不跑偏？"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "advance",
+      "expect_phase_after": "fundamentals",
+      "expect_cap_forced": true,
+      "expect_finished": false,
+      "rationale": "自我介绍阶段 cap=0，任何回答都必须强制翻页，不花钱调模型。"
+    },
+    {
+      "id": "intro-skip-empty-fundamentals",
+      "phase": "intro",
+      "question": "请先做一个 1-2 分钟的自我介绍，重点讲讲你的技术背景和最近做过的项目。",
+      "candidate_answer": "我主要做 RAG 和 AI 应用开发，项目是 AI Interview Assistant。",
+      "followups_used": 0,
+      "cap": 0,
+      "total_asked": 1,
+      "kb_snippets": [],
+      "topics": {
+        "fundamentals_topics": [],
+        "project_topics": [
+          "讲讲你项目里 RAG 从用户提问到返回答案的完整链路。",
+          "如果让你重新设计这个面试 Agent 的追问决策，你会怎么保证它不跑偏？"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "advance",
+      "expect_phase_after": "project",
+      "expect_cap_forced": true,
+      "expect_finished": false,
+      "rationale": "intro→fundamentals 后八股题为空，_skip_exhausted 应直接跳到 project。"
+    },
+    {
+      "id": "fund-A-vague-jvm",
+      "phase": "fundamentals",
+      "question": "说说 JVM 的分代回收机制，新生代和老年代分别用什么回收算法？",
+      "candidate_answer": "JVM 分为新生代和老年代，新生代里对象很快就死了，老年代放存活久的对象。具体用什么算法我记不清了，反正垃圾回收会自动处理。",
+      "followups_used": 0,
+      "cap": 2,
+      "total_asked": 2,
+      "kb_snippets": [
+        "JVM 堆分为新生代（Eden + 两个 Survivor）和老年代；新生代对象朝生夕灭，老年代对象存活率高。",
+        "新生代通常使用复制算法，老年代通常使用标记-清除或标记-整理算法。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "说说 JVM 的分代回收机制，新生代和老年代分别用什么回收算法？",
+          "Spring Boot 的自动配置是怎么生效的？",
+          "MySQL 为什么用 B+ 树做索引，而不是 B 树或哈希？"
+        ],
+        "project_topics": [
+          "讲讲你项目里 RAG 从用户提问到返回答案的完整链路。"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "followup",
+      "expect_phase_after": null,
+      "expect_cap_forced": false,
+      "expect_finished": false,
+      "rationale": "A 类：回答含糊、没说出复制/标记-整理等具体算法 → 追问补齐。"
+    },
+    {
+      "id": "fund-B-deep-spring",
+      "phase": "fundamentals",
+      "question": "Spring Boot 的自动配置是怎么生效的？",
+      "candidate_answer": "启动类上的 @SpringBootApplication 包含了 @EnableAutoConfiguration，它会读取 META-INF 里的自动配置类，再靠 @ConditionalOnClass、@ConditionalOnMissingBean 这类条件注解决定配置要不要生效。我之前项目里自定义了一个 Bean 没生效，最后发现是和自动配置里的 @ConditionalOnMissingBean 有关。",
+      "followups_used": 0,
+      "cap": 2,
+      "total_asked": 2,
+      "kb_snippets": [
+        "@SpringBootApplication = @SpringBootConfiguration + @EnableAutoConfiguration + @ComponentScan。",
+        "自动配置类通过 META-INF/spring.factories（Boot 3 为 AutoConfiguration.imports）注册，@ConditionalOnClass / @ConditionalOnMissingBean 控制生效条件。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "Spring Boot 的自动配置是怎么生效的？",
+          "MySQL 为什么用 B+ 树做索引，而不是 B 树或哈希？"
+        ],
+        "project_topics": [
+          "讲讲你项目里 RAG 从用户提问到返回答案的完整链路。"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "followup",
+      "expect_phase_after": null,
+      "expect_cap_forced": false,
+      "expect_finished": false,
+      "rationale": "B 类：回答准确且主动提到 @ConditionalOnMissingBean 的覆盖问题 → 就该点深挖。"
+    },
+    {
+      "id": "fund-advance-complete-mysql",
+      "phase": "fundamentals",
+      "question": "MySQL 为什么用 B+ 树做索引，而不是 B 树或哈希？",
+      "candidate_answer": "B+ 树的非叶子节点只存索引键、不存数据，同样大小的页能放更多键，树更矮，磁盘 IO 更少；叶子节点存数据并用链表相连，范围查询和排序可以顺着叶子扫；哈希索引只支持等值查询，不支持范围和排序，所以 InnoDB 默认选 B+ 树。",
+      "followups_used": 0,
+      "cap": 2,
+      "total_asked": 3,
+      "kb_snippets": [
+        "InnoDB 使用 B+ 树索引：非叶子节点只存键，叶子节点存数据且按序链表相连，支持范围查询。",
+        "B+ 树高度通常 3-4 层，单页 16KB，磁盘 IO 次数少。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "MySQL 为什么用 B+ 树做索引，而不是 B 树或哈希？",
+          "说说事务的隔离级别，MVCC 解决了什么问题？"
+        ],
+        "project_topics": [
+          "讲讲你项目里 RAG 从用户提问到返回答案的完整链路。"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "advance",
+      "expect_phase_after": "fundamentals",
+      "expect_cap_forced": false,
+      "expect_finished": false,
+      "rationale": "回答覆盖了 B+ 树结构、范围查询与哈希对比，已充分 → 翻页。"
+    },
+    {
+      "id": "fund-A-error-redis-persistence",
+      "phase": "fundamentals",
+      "question": "Redis 的持久化方式有哪些？生产环境一般怎么选？",
+      "candidate_answer": "Redis 只有 RDB 一种持久化，AOF 是 MySQL 的日志，和 Redis 没关系。生产环境开 RDB 就够了，因为 Redis 本来就是缓存，丢了可以重建。",
+      "followups_used": 0,
+      "cap": 2,
+      "total_asked": 3,
+      "kb_snippets": [
+        "Redis 提供 RDB 与 AOF 两种持久化：RDB 是快照，AOF 记录写命令。",
+        "混合持久化把 RDB 全量快照与增量 AOF 结合。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "Redis 的持久化方式有哪些？生产环境一般怎么选？",
+          "说说事务的隔离级别，MVCC 解决了什么问题？"
+        ],
+        "project_topics": [
+          "讲讲你项目里 RAG 从用户提问到返回答案的完整链路。"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "followup",
+      "expect_phase_after": null,
+      "expect_cap_forced": false,
+      "expect_finished": false,
+      "rationale": "A 类：AOF 不是 MySQL 的日志，这是事实错误 → 追问纠正并补齐。"
+    },
+    {
+      "id": "fund-A-cap1-hnsw",
+      "phase": "fundamentals",
+      "question": "ChromaDB 的 HNSW 是近似检索，为什么 n_results 会影响召回？",
+      "candidate_answer": "n_results 就是返回几条结果吧，设大一点结果会更准。",
+      "followups_used": 1,
+      "cap": 2,
+      "total_asked": 4,
+      "kb_snippets": [
+        "ChromaDB 使用 HNSW 近似最近邻索引，n_results 参数同时决定返回条数与搜索强度。",
+        "HNSW 通过多层图做近似检索，ef 等参数影响召回率与延迟。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "ChromaDB 的 HNSW 是近似检索，为什么 n_results 会影响召回？",
+          "说说事务的隔离级别，MVCC 解决了什么问题？"
+        ],
+        "project_topics": [
+          "讲讲你项目里 RAG 从用户提问到返回答案的完整链路。"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "followup",
+      "expect_phase_after": null,
+      "expect_cap_forced": false,
+      "expect_finished": false,
+      "rationale": "追问 1/2，仍在 cap 内；回答仍然含糊 → 继续追问。"
+    },
+    {
+      "id": "fund-cap2-force",
+      "phase": "fundamentals",
+      "question": "说说事务的隔离级别，MVCC 解决了什么问题？",
+      "candidate_answer": "隔离级别有读未提交、读已提交、可重复读、串行化；MVCC 通过版本链和 ReadView 让读不加锁，实现一致性读，解决了读写冲突。",
+      "followups_used": 2,
+      "cap": 2,
+      "total_asked": 5,
+      "kb_snippets": [
+        "InnoDB 的 MVCC 通过隐藏列与 undo log 版本链、ReadView 实现快照读。",
+        "可重复读隔离级别下，快照读使用事务开始时生成的 ReadView。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "说说事务的隔离级别，MVCC 解决了什么问题？",
+          "Spring Boot 的自动配置是怎么生效的？"
+        ],
+        "project_topics": [
+          "讲讲你项目里 RAG 从用户提问到返回答案的完整链路。"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "advance",
+      "expect_phase_after": "fundamentals",
+      "expect_cap_forced": true,
+      "expect_finished": false,
+      "rationale": "八股追问已用满 2 次 → 强制翻页（不调模型、不检索）。"
+    },
+    {
+      "id": "proj-A-shallow-rag-chain",
+      "phase": "project",
+      "question": "讲讲你项目里 RAG 从用户提问到返回答案的完整链路。",
+      "candidate_answer": "就是先把文档切分、向量化存到 ChromaDB，用户提问的时候去检索相关片段，拼到 prompt 里给大模型生成答案。",
+      "followups_used": 0,
+      "cap": 3,
+      "total_asked": 6,
+      "kb_snippets": [
+        "RAG 链路：文档切分 → Embedding → 向量检索 → 上下文拼接 → 引用溯源。",
+        "检索质量常用 recall@k、MRR 评测；ChromaDB 的 HNSW 是近似检索。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "说说事务的隔离级别，MVCC 解决了什么问题？"
+        ],
+        "project_topics": [
+          "讲讲你项目里 RAG 从用户提问到返回答案的完整链路。",
+          "如果让你重新设计这个面试 Agent 的追问决策，你会怎么保证它不跑偏？"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "followup",
+      "expect_phase_after": null,
+      "expect_cap_forced": false,
+      "expect_finished": false,
+      "rationale": "A 类：链路描述过于笼统，没说 embedding 模型、top_k、引用与评测 → 追问补齐。"
+    },
+    {
+      "id": "proj-B-deep-eval-metrics",
+      "phase": "project",
+      "question": "你简历里写了自建 31 题检索评测集，recall@k 和 MRR 分别衡量什么？",
+      "candidate_answer": "recall@k 是前 k 条里有没有召回相关片段，MRR 是第一个相关结果排名倒数的平均值，排名越靠前越高。我那 31 题按单文档、精确术语、多文档、多轮指代、拒答、越界分了 6 层，每次改检索参数都会跑一遍和基线对比。",
+      "followups_used": 0,
+      "cap": 3,
+      "total_asked": 6,
+      "kb_snippets": [
+        "recall@k 衡量前 k 个结果中是否包含相关文档；MRR 取首个相关结果排名的倒数。",
+        "检索评测集按问题类型分层，可避免整体指标掩盖某一类问题的退化。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "说说事务的隔离级别，MVCC 解决了什么问题？"
+        ],
+        "project_topics": [
+          "你简历里写了自建 31 题检索评测集，recall@k 和 MRR 分别衡量什么？",
+          "如果让你重新设计这个面试 Agent 的追问决策，你会怎么保证它不跑偏？"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "followup",
+      "expect_phase_after": null,
+      "expect_cap_forced": false,
+      "expect_finished": false,
+      "rationale": "B 类：回答准确且有料（6 层分法、逐层对比）→ 就评测集设计再深挖。"
+    },
+    {
+      "id": "proj-advance-complete-refusal",
+      "phase": "project",
+      "question": "你为什么不直接用相似度分数阈值来做拒答？",
+      "candidate_answer": "因为我实测过分数不可分：正样本最低分是 0.5885，负样本最高分是 0.7214，两者区间重叠，任何单一阈值都会误拒或漏拒。所以改成确定性的规则——问题里出现的英文标识符必须在检索到的内容里命中，否则拒答；这样零额外 LLM 调用，拒答准确率从 0/8 提到 6/6，正样本误杀 0/23。",
+      "followups_used": 0,
+      "cap": 3,
+      "total_asked": 7,
+      "kb_snippets": [
+        "拒答可通过检索分数阈值、规则或 LLM 判定实现；规则方案确定性强、无额外调用。",
+        "分数阈值在正负样本分布重叠时不可分。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "说说事务的隔离级别，MVCC 解决了什么问题？"
+        ],
+        "project_topics": [
+          "你为什么不直接用相似度分数阈值来做拒答？",
+          "如果让你重新设计这个面试 Agent 的追问决策，你会怎么保证它不跑偏？"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "advance",
+      "expect_phase_after": "project",
+      "expect_cap_forced": false,
+      "expect_finished": false,
+      "rationale": "回答有实测数据、改动方案与效果，已充分 → 翻页。"
+    },
+    {
+      "id": "proj-A-cap2-flashmall",
+      "phase": "project",
+      "question": "FlashMall 里你是怎么防止超卖的？",
+      "candidate_answer": "用 Redis + Lua 做库存预减，判断和扣减在同一个脚本里，保证原子性；再加 Redisson 分布式锁和 MySQL 乐观锁兜底，压测下来没有超卖。",
+      "followups_used": 2,
+      "cap": 3,
+      "total_asked": 8,
+      "kb_snippets": [
+        "Redis Lua 脚本在服务端原子执行，可用于库存预减与超卖防护。",
+        "Redisson 提供分布式锁；MySQL 乐观锁通过版本号防止并发更新丢失。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "说说事务的隔离级别，MVCC 解决了什么问题？"
+        ],
+        "project_topics": [
+          "FlashMall 里你是怎么防止超卖的？",
+          "如果让你重新设计这个面试 Agent 的追问决策，你会怎么保证它不跑偏？"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "followup",
+      "expect_phase_after": null,
+      "expect_cap_forced": false,
+      "expect_finished": false,
+      "rationale": "追问 2/3，仍可追问；回答没提预减失败后的回滚与幂等 → 追问细节。"
+    },
+    {
+      "id": "proj-cap3-force",
+      "phase": "project",
+      "question": "如果让你重新设计这个面试 Agent 的追问决策，你会怎么保证它不跑偏？",
+      "candidate_answer": "把流程和决策分开：阶段推进、追问上限、总题数上限由代码状态机控制，只有追问还是翻页交给模型，并用工具调用编码成二选一。",
+      "followups_used": 3,
+      "cap": 3,
+      "total_asked": 9,
+      "kb_snippets": [
+        "确定性状态机 + 局部模型决策：流程由代码约束，决策用工具调用编码。",
+        "追问上限与总题数上限可在代码层强制，避免模型无限追问。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "说说事务的隔离级别，MVCC 解决了什么问题？"
+        ],
+        "project_topics": [
+          "如果让你重新设计这个面试 Agent 的追问决策，你会怎么保证它不跑偏？",
+          "再讲讲你项目里最得意的一个优化。"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "advance",
+      "expect_phase_after": "project",
+      "expect_cap_forced": true,
+      "expect_finished": false,
+      "rationale": "项目追问已用满 3 次 → 强制翻页到下一题。"
+    },
+    {
+      "id": "proj-advance-last-topic",
+      "phase": "project",
+      "question": "再讲讲你项目里最得意的一个优化。",
+      "candidate_answer": "我最得意的是把拒答从分数阈值改成确定性规则。先用评测证明正负样本分数重叠、阈值不可分，再改成英文标识符必须命中，拒答准确率从 0/8 到 6/6，正样本误杀 0/23，而且不增加 LLM 调用。",
+      "followups_used": 1,
+      "cap": 3,
+      "total_asked": 11,
+      "kb_snippets": [
+        "确定性拒答规则：问题中的英文标识符必须在检索内容中命中。",
+        "评测驱动的优化：先量化问题，再改方案并复测。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "说说事务的隔离级别，MVCC 解决了什么问题？"
+        ],
+        "project_topics": [
+          "FlashMall 里你是怎么防止超卖的？",
+          "再讲讲你项目里最得意的一个优化。"
+        ]
+      },
+      "topic_index": 1,
+      "expect_action": "advance",
+      "expect_phase_after": "done",
+      "expect_cap_forced": false,
+      "expect_finished": true,
+      "rationale": "最后一道项目题且回答充分 → 翻页后无题可出，整场 done。"
+    },
+    {
+      "id": "total-cap12-force",
+      "phase": "project",
+      "question": "最后一个问题：你怎么保证长链路的异步任务不丢消息？",
+      "candidate_answer": "生产端用确认机制，消费端手动 ACK；失败进重试队列，超过次数进死信队列；关键业务再配合本地消息表和定时对账兜底。",
+      "followups_used": 0,
+      "cap": 3,
+      "total_asked": 12,
+      "kb_snippets": [
+        "RabbitMQ 消费端手动 ACK 保证消息不丢；失败可重试或进入死信队列。",
+        "可靠消息最终一致性可用本地消息表 + 定时对账实现。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "说说事务的隔离级别，MVCC 解决了什么问题？"
+        ],
+        "project_topics": [
+          "你怎么保证长链路的异步任务不丢消息？",
+          "再讲讲你项目里最得意的一个优化。"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "advance",
+      "expect_phase_after": "done",
+      "expect_cap_forced": true,
+      "expect_finished": true,
+      "rationale": "第 12 题答完 → 总题数上限强制收尾，不再出第 13 题。"
+    },
+    {
+      "id": "fund-advance-complete-redis-aof",
+      "phase": "fundamentals",
+      "question": "Redis 的 RDB 和 AOF 各有什么优缺点？",
+      "candidate_answer": "RDB 是定时快照，文件小、恢复快，但会丢最后一次快照之后的数据；AOF 记录每条写命令，丢数据少，但文件大、恢复慢，还可以 rewrite 压缩。生产上一般开 AOF everysec，重要数据配合 RDB 做备份，或者用混合持久化。",
+      "followups_used": 0,
+      "cap": 2,
+      "total_asked": 4,
+      "kb_snippets": [
+        "Redis 提供 RDB 与 AOF 两种持久化：RDB 是快照，AOF 记录写命令。",
+        "混合持久化把 RDB 全量快照与增量 AOF 结合。"
+      ],
+      "topics": {
+        "fundamentals_topics": [
+          "Redis 的 RDB 和 AOF 各有什么优缺点？",
+          "说说事务的隔离级别，MVCC 解决了什么问题？"
+        ],
+        "project_topics": [
+          "讲讲你项目里 RAG 从用户提问到返回答案的完整链路。"
+        ]
+      },
+      "topic_index": 0,
+      "expect_action": "advance",
+      "expect_phase_after": "fundamentals",
+      "expect_cap_forced": false,
+      "expect_finished": false,
+      "rationale": "回答覆盖两种方式、取舍与生产选型，已充分 → 翻页。"
+    }
+  ]
+}

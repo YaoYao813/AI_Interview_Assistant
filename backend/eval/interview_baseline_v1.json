@@ -1,0 +1,481 @@
+{
+  "meta": {
+    "date": "2026-10-21",
+    "model": "deepseek-flash",
+    "temperature": 0.0,
+    "case_count": 16,
+    "model_cases": 11,
+    "forced_cases": 5,
+    "cases_version": "interview-cases-v1",
+    "decision_prompt": "DECISION_SYSTEM_PROMPT（阶段 4 定稿）",
+    "repeat": 3,
+    "expectation": "未触顶 case 由模型在 ask_followup / advance 中二选一；触顶 case 由代码强制 advance（不调模型、不检索）",
+    "note": "面试仪器：每条 case 只做一次 chat_with_tools；KB 片段冻结，不依赖语料快照"
+  },
+  "by_run": [
+    {
+      "n": 16,
+      "decision": {
+        "n": 11,
+        "correct": 7,
+        "accuracy": 0.6364,
+        "by_phase": {
+          "fundamentals": {
+            "n": 6,
+            "correct": 4,
+            "accuracy": 0.6667
+          },
+          "project": {
+            "n": 5,
+            "correct": 3,
+            "accuracy": 0.6
+          }
+        },
+        "wrong_ids": [
+          "fund-advance-complete-mysql",
+          "proj-advance-complete-refusal",
+          "proj-advance-last-topic",
+          "fund-advance-complete-redis-aof"
+        ],
+        "confusion": {
+          "followup->followup": 7,
+          "advance->followup": 4
+        }
+      },
+      "cap_compliance": {
+        "n": 5,
+        "correct": 5,
+        "rate": 1.0,
+        "wrong_ids": []
+      },
+      "phase_transition": {
+        "n": 9,
+        "correct": 9,
+        "rate": 1.0,
+        "wrong_ids": []
+      },
+      "termination": {
+        "n": 2,
+        "correct": 2,
+        "rate": 1.0,
+        "wrong_ids": []
+      },
+      "errors": []
+    },
+    {
+      "n": 16,
+      "decision": {
+        "n": 11,
+        "correct": 7,
+        "accuracy": 0.6364,
+        "by_phase": {
+          "fundamentals": {
+            "n": 6,
+            "correct": 4,
+            "accuracy": 0.6667
+          },
+          "project": {
+            "n": 5,
+            "correct": 3,
+            "accuracy": 0.6
+          }
+        },
+        "wrong_ids": [
+          "fund-advance-complete-mysql",
+          "proj-advance-complete-refusal",
+          "proj-advance-last-topic",
+          "fund-advance-complete-redis-aof"
+        ],
+        "confusion": {
+          "followup->followup": 7,
+          "advance->followup": 4
+        }
+      },
+      "cap_compliance": {
+        "n": 5,
+        "correct": 5,
+        "rate": 1.0,
+        "wrong_ids": []
+      },
+      "phase_transition": {
+        "n": 9,
+        "correct": 9,
+        "rate": 1.0,
+        "wrong_ids": []
+      },
+      "termination": {
+        "n": 2,
+        "correct": 2,
+        "rate": 1.0,
+        "wrong_ids": []
+      },
+      "errors": []
+    },
+    {
+      "n": 16,
+      "decision": {
+        "n": 11,
+        "correct": 7,
+        "accuracy": 0.6364,
+        "by_phase": {
+          "fundamentals": {
+            "n": 6,
+            "correct": 4,
+            "accuracy": 0.6667
+          },
+          "project": {
+            "n": 5,
+            "correct": 3,
+            "accuracy": 0.6
+          }
+        },
+        "wrong_ids": [
+          "fund-advance-complete-mysql",
+          "proj-advance-complete-refusal",
+          "proj-advance-last-topic",
+          "fund-advance-complete-redis-aof"
+        ],
+        "confusion": {
+          "followup->followup": 7,
+          "advance->followup": 4
+        }
+      },
+      "cap_compliance": {
+        "n": 5,
+        "correct": 5,
+        "rate": 1.0,
+        "wrong_ids": []
+      },
+      "phase_transition": {
+        "n": 9,
+        "correct": 9,
+        "rate": 1.0,
+        "wrong_ids": []
+      },
+      "termination": {
+        "n": 2,
+        "correct": 2,
+        "rate": 1.0,
+        "wrong_ids": []
+      },
+      "errors": []
+    }
+  ],
+  "per_case": [
+    {
+      "id": "intro-cap0",
+      "phase": "intro",
+      "kind": "forced",
+      "expected_action": "advance",
+      "followups_used": 0,
+      "cap": 0,
+      "total_asked": 1,
+      "rationale": "自我介绍阶段 cap=0，任何回答都必须强制翻页，不花钱调模型。",
+      "actual_action": "advance",
+      "correct": true,
+      "forced_flag": true,
+      "followup_question": null,
+      "phase_after_expected": "fundamentals",
+      "phase_after_actual": "fundamentals",
+      "phase_after_ok": true
+    },
+    {
+      "id": "intro-skip-empty-fundamentals",
+      "phase": "intro",
+      "kind": "forced",
+      "expected_action": "advance",
+      "followups_used": 0,
+      "cap": 0,
+      "total_asked": 1,
+      "rationale": "intro→fundamentals 后八股题为空，_skip_exhausted 应直接跳到 project。",
+      "actual_action": "advance",
+      "correct": true,
+      "forced_flag": true,
+      "followup_question": null,
+      "phase_after_expected": "project",
+      "phase_after_actual": "project",
+      "phase_after_ok": true
+    },
+    {
+      "id": "fund-A-vague-jvm",
+      "phase": "fundamentals",
+      "kind": "model",
+      "expected_action": "followup",
+      "followups_used": 0,
+      "cap": 2,
+      "total_asked": 2,
+      "rationale": "A 类：回答含糊、没说出复制/标记-整理等具体算法 → 追问补齐。",
+      "actual_action": "followup",
+      "correct": true,
+      "followup_question": "新生代里对象具体是在哪几块区域之间流动的（Eden 和 Survivor 的关系），以及新生代用的是什么回收算法、为什么选它？老年代又对应哪种算法？",
+      "raw_tool_calls": [
+        {
+          "name": "ask_followup",
+          "arguments": "{\"question\": \"新生代里对象具体是在哪几块区域之间流动的（Eden 和 Survivor 的关系），以及新生代用的是什么回收算法、为什么选它？老年代又对应哪种算法？\"}"
+        }
+      ]
+    },
+    {
+      "id": "fund-B-deep-spring",
+      "phase": "fundamentals",
+      "kind": "model",
+      "expected_action": "followup",
+      "followups_used": 0,
+      "cap": 2,
+      "total_asked": 2,
+      "rationale": "B 类：回答准确且主动提到 @ConditionalOnMissingBean 的覆盖问题 → 就该点深挖。",
+      "actual_action": "followup",
+      "correct": true,
+      "followup_question": "你提到自定义 Bean 没生效和 @ConditionalOnMissingBean 有关——具体说下当时的场景：@ConditionalOnMissingBean 是在什么时机做判断的，它和用户自定义配置、自动配置类之间的加载顺序是什么关系？你最后是怎么解决的？",
+      "raw_tool_calls": [
+        {
+          "name": "ask_followup",
+          "arguments": "{\"question\": \"你提到自定义 Bean 没生效和 @ConditionalOnMissingBean 有关——具体说下当时的场景：@ConditionalOnMissingBean 是在什么时机做判断的，它和用户自定义配置、自动配置类之间的加载顺序是什么关系？你最后是怎么解决的？\"}"
+        }
+      ]
+    },
+    {
+      "id": "fund-advance-complete-mysql",
+      "phase": "fundamentals",
+      "kind": "model",
+      "expected_action": "advance",
+      "followups_used": 0,
+      "cap": 2,
+      "total_asked": 3,
+      "rationale": "回答覆盖了 B+ 树结构、范围查询与哈希对比，已充分 → 翻页。",
+      "actual_action": "followup",
+      "correct": false,
+      "followup_question": "你提到\"树更矮、磁盘 IO 更少\"，能具体估算一下吗：InnoDB 单页 16KB、主键 bigint 加页指针大约 10 多个字节，一棵高度为 3 层的 B+ 树大概能存多少行数据？一次按主键的等值查询大概需要几次磁盘 IO，这和你说的\"树高 3-4 层\"是怎么对应上的？",
+      "raw_tool_calls": [
+        {
+          "name": "ask_followup",
+          "arguments": "{\"question\": \"你提到\\\"树更矮、磁盘 IO 更少\\\"，能具体估算一下吗：InnoDB 单页 16KB、主键 bigint 加页指针大约 10 多个字节，一棵高度为 3 层的 B+ 树大概能存多少行数据？一次按主键的等值查询大概需要几次磁盘 IO，这和你说的\\\"树高 3-4 层\\\"是怎么对应上的？\"}"
+        }
+      ],
+      "phase_after_expected": "fundamentals",
+      "phase_after_actual": "fundamentals",
+      "phase_after_ok": true
+    },
+    {
+      "id": "fund-A-error-redis-persistence",
+      "phase": "fundamentals",
+      "kind": "model",
+      "expected_action": "followup",
+      "followups_used": 0,
+      "cap": 2,
+      "total_asked": 3,
+      "rationale": "A 类：AOF 不是 MySQL 的日志，这是事实错误 → 追问纠正并补齐。",
+      "actual_action": "followup",
+      "correct": true,
+      "followup_question": "纠正一下：AOF 是 Redis 自身的第二种持久化方式，不是 MySQL 的。那请你说说 RDB（快照）和 AOF（记录写命令）各自的机制和优缺点分别是什么？另外你提到\"缓存丢了可以重建\"——那在什么场景下你会选择 AOF 或 RDB+AOF 混合持久化，而不是只开 RDB？",
+      "raw_tool_calls": [
+        {
+          "name": "ask_followup",
+          "arguments": "{\"question\": \"纠正一下：AOF 是 Redis 自身的第二种持久化方式，不是 MySQL 的。那请你说说 RDB（快照）和 AOF（记录写命令）各自的机制和优缺点分别是什么？另外你提到\\\"缓存丢了可以重建\\\"——那在什么场景下你会选择 AOF 或 RDB+AOF 混合持久化，而不是只开 RDB？\"}"
+        }
+      ]
+    },
+    {
+      "id": "fund-A-cap1-hnsw",
+      "phase": "fundamentals",
+      "kind": "model",
+      "expected_action": "followup",
+      "followups_used": 1,
+      "cap": 2,
+      "total_asked": 4,
+      "rationale": "追问 1/2，仍在 cap 内；回答仍然含糊 → 继续追问。",
+      "actual_action": "followup",
+      "correct": true,
+      "followup_question": "你说\"设大一点结果会更准\"，那从 HNSW 内部看，n_results 变大到底改变了什么？它和 ef 这类搜索参数是什么关系，为什么召回会上升、代价又是什么？",
+      "raw_tool_calls": [
+        {
+          "name": "ask_followup",
+          "arguments": "{\"question\": \"你说\\\"设大一点结果会更准\\\"，那从 HNSW 内部看，n_results 变大到底改变了什么？它和 ef 这类搜索参数是什么关系，为什么召回会上升、代价又是什么？\"}"
+        }
+      ]
+    },
+    {
+      "id": "fund-cap2-force",
+      "phase": "fundamentals",
+      "kind": "forced",
+      "expected_action": "advance",
+      "followups_used": 2,
+      "cap": 2,
+      "total_asked": 5,
+      "rationale": "八股追问已用满 2 次 → 强制翻页（不调模型、不检索）。",
+      "actual_action": "advance",
+      "correct": true,
+      "forced_flag": true,
+      "followup_question": null,
+      "phase_after_expected": "fundamentals",
+      "phase_after_actual": "fundamentals",
+      "phase_after_ok": true
+    },
+    {
+      "id": "proj-A-shallow-rag-chain",
+      "phase": "project",
+      "kind": "model",
+      "expected_action": "followup",
+      "followups_used": 0,
+      "cap": 3,
+      "total_asked": 6,
+      "rationale": "A 类：链路描述过于笼统，没说 embedding 模型、top_k、引用与评测 → 追问补齐。",
+      "actual_action": "followup",
+      "correct": true,
+      "followup_question": "你简历里写了「拒答判定下沉到检索层」——那检索这一层具体是怎么定的：切分粒度多大、top-k 取多少、相似度阈值怎么设？如果检索回来的片段相关度都不够，你的链路在哪一步、用什么依据决定拒答而不是硬塞给大模型？",
+      "raw_tool_calls": [
+        {
+          "name": "ask_followup",
+          "arguments": "{\"question\": \"你简历里写了「拒答判定下沉到检索层」——那检索这一层具体是怎么定的：切分粒度多大、top-k 取多少、相似度阈值怎么设？如果检索回来的片段相关度都不够，你的链路在哪一步、用什么依据决定拒答而不是硬塞给大模型？\"}"
+        }
+      ]
+    },
+    {
+      "id": "proj-B-deep-eval-metrics",
+      "phase": "project",
+      "kind": "model",
+      "expected_action": "followup",
+      "followups_used": 0,
+      "cap": 3,
+      "total_asked": 6,
+      "rationale": "B 类：回答准确且有料（6 层分法、逐层对比）→ 就评测集设计再深挖。",
+      "actual_action": "followup",
+      "correct": true,
+      "followup_question": "你提到按 6 层分层评测、每次改动都和基线对比——那如果某次调参后整体 recall@k 涨了、但 MRR 掉了（或者相反），你怎么判断这次改动到底算不算变好？以及为什么要按层去看，而不是只报一个整体指标就够了？",
+      "raw_tool_calls": [
+        {
+          "name": "ask_followup",
+          "arguments": "{\"question\": \"你提到按 6 层分层评测、每次改动都和基线对比——那如果某次调参后整体 recall@k 涨了、但 MRR 掉了（或者相反），你怎么判断这次改动到底算不算变好？以及为什么要按层去看，而不是只报一个整体指标就够了？\"}"
+        }
+      ]
+    },
+    {
+      "id": "proj-advance-complete-refusal",
+      "phase": "project",
+      "kind": "model",
+      "expected_action": "advance",
+      "followups_used": 0,
+      "cap": 3,
+      "total_asked": 7,
+      "rationale": "回答有实测数据、改动方案与效果，已充分 → 翻页。",
+      "actual_action": "followup",
+      "correct": false,
+      "followup_question": "你的规则依赖「问题里出现英文标识符」这个前提。那如果用户问的是一个纯中文、不含任何标识符的问题（比如「这个项目怎么做限流」），规则还能判定吗？这种情况下你会回退到什么策略，如何避免退化成你刚否掉的分数阈值？",
+      "raw_tool_calls": [
+        {
+          "name": "ask_followup",
+          "arguments": "{\"question\": \"你的规则依赖「问题里出现英文标识符」这个前提。那如果用户问的是一个纯中文、不含任何标识符的问题（比如「这个项目怎么做限流」），规则还能判定吗？这种情况下你会回退到什么策略，如何避免退化成你刚否掉的分数阈值？\"}"
+        }
+      ],
+      "phase_after_expected": "project",
+      "phase_after_actual": "project",
+      "phase_after_ok": true
+    },
+    {
+      "id": "proj-A-cap2-flashmall",
+      "phase": "project",
+      "kind": "model",
+      "expected_action": "followup",
+      "followups_used": 2,
+      "cap": 3,
+      "total_asked": 8,
+      "rationale": "追问 2/3，仍可追问；回答没提预减失败后的回滚与幂等 → 追问细节。",
+      "actual_action": "followup",
+      "correct": true,
+      "followup_question": "你同时用了 Redis Lua 预减和 Redisson 分布式锁——既然 Lua 脚本在 Redis 单线程里已经是原子执行的，那这把分布式锁保护的具体是哪段临界区、解决的是 Lua 本身解决不了的什么问题？如果去掉它，会出现什么后果？",
+      "raw_tool_calls": [
+        {
+          "name": "ask_followup",
+          "arguments": "{\"question\": \"你同时用了 Redis Lua 预减和 Redisson 分布式锁——既然 Lua 脚本在 Redis 单线程里已经是原子执行的，那这把分布式锁保护的具体是哪段临界区、解决的是 Lua 本身解决不了的什么问题？如果去掉它，会出现什么后果？\"}"
+        }
+      ]
+    },
+    {
+      "id": "proj-cap3-force",
+      "phase": "project",
+      "kind": "forced",
+      "expected_action": "advance",
+      "followups_used": 3,
+      "cap": 3,
+      "total_asked": 9,
+      "rationale": "项目追问已用满 3 次 → 强制翻页到下一题。",
+      "actual_action": "advance",
+      "correct": true,
+      "forced_flag": true,
+      "followup_question": null,
+      "phase_after_expected": "project",
+      "phase_after_actual": "project",
+      "phase_after_ok": true
+    },
+    {
+      "id": "proj-advance-last-topic",
+      "phase": "project",
+      "kind": "model",
+      "expected_action": "advance",
+      "followups_used": 1,
+      "cap": 3,
+      "total_asked": 11,
+      "rationale": "最后一道项目题且回答充分 → 翻页后无题可出，整场 done。",
+      "actual_action": "followup",
+      "correct": false,
+      "followup_question": "你的规则依赖“问题里的英文标识符必须在检索内容中命中”，那两类边界情况你怎么处理：一是纯中文、根本不含英文标识符的问题（规则直接失效还是走别的兜底）；二是标识符其实在知识库里、但被 HNSW 近似检索漏召回了，这时规则会误判成该拒答——你有没有做召回率和拒答误判的联合评估？",
+      "raw_tool_calls": [
+        {
+          "name": "ask_followup",
+          "arguments": "{\"question\": \"你的规则依赖“问题里的英文标识符必须在检索内容中命中”，那两类边界情况你怎么处理：一是纯中文、根本不含英文标识符的问题（规则直接失效还是走别的兜底）；二是标识符其实在知识库里、但被 HNSW 近似检索漏召回了，这时规则会误判成该拒答——你有没有做召回率和拒答误判的联合评估？\"}"
+        }
+      ],
+      "phase_after_expected": "done",
+      "phase_after_actual": "done",
+      "phase_after_ok": true,
+      "finished_actual": true,
+      "termination_ok": true
+    },
+    {
+      "id": "total-cap12-force",
+      "phase": "project",
+      "kind": "forced",
+      "expected_action": "advance",
+      "followups_used": 0,
+      "cap": 3,
+      "total_asked": 12,
+      "rationale": "第 12 题答完 → 总题数上限强制收尾，不再出第 13 题。",
+      "actual_action": "advance",
+      "correct": true,
+      "forced_flag": true,
+      "followup_question": null,
+      "phase_after_expected": "done",
+      "phase_after_actual": "done",
+      "phase_after_ok": true,
+      "finished_actual": true,
+      "termination_ok": true
+    },
+    {
+      "id": "fund-advance-complete-redis-aof",
+      "phase": "fundamentals",
+      "kind": "model",
+      "expected_action": "advance",
+      "followups_used": 0,
+      "cap": 2,
+      "total_asked": 4,
+      "rationale": "回答覆盖两种方式、取舍与生产选型，已充分 → 翻页。",
+      "actual_action": "followup",
+      "correct": false,
+      "followup_question": "你提到混合持久化，能具体说一下开启 aof-use-rdb-preamble 后 AOF 文件里存的是什么、Redis 重启时是按什么顺序加载的吗？另外 AOF rewrite 是由哪些条件触发的？",
+      "raw_tool_calls": [
+        {
+          "name": "ask_followup",
+          "arguments": "{\"question\": \"你提到混合持久化，能具体说一下开启 aof-use-rdb-preamble 后 AOF 文件里存的是什么、Redis 重启时是按什么顺序加载的吗？另外 AOF rewrite 是由哪些条件触发的？\"}"
+        }
+      ],
+      "phase_after_expected": "fundamentals",
+      "phase_after_actual": "fundamentals",
+      "phase_after_ok": true
+    }
+  ],
+  "stability": {
+    "runs": 3,
+    "stable_actions": 16,
+    "flaky_action_ids": []
+  }
+}
