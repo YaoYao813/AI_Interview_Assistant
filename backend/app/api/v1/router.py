@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.api.v1.agent import router as agent_router
 from app.api.v1.interview import router as interview_router
+from app.api.v1.interview_agent import router as interview_agent_router
 from app.api.v1.knowledge import router as knowledge_router
 from app.api.v1.rag import router as rag_router
 from app.api.v1.resume import router as resume_router
@@ -16,6 +17,7 @@ api_v1_router = APIRouter()
 api_v1_router.include_router(knowledge_router)
 api_v1_router.include_router(rag_router)
 api_v1_router.include_router(interview_router)
+api_v1_router.include_router(interview_agent_router)
 api_v1_router.include_router(resume_router)
 api_v1_router.include_router(roadmap_router)
 api_v1_router.include_router(agent_router)

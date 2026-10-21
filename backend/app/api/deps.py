@@ -15,6 +15,7 @@ from app.services.rag_service import get_rag_service, RAGService
 from app.services.resume_service import ResumeService, get_resume_service
 from app.services.learning_service import LearningService, get_learning_service
 from app.services.interview_service import InterviewService
+from app.services.interview_agent_service import InterviewAgentService
 
 
 def get_knowledge_svc() -> KnowledgeService:
@@ -51,6 +52,18 @@ def get_learning_svc(cache: CacheRepository = Depends(get_cache)) -> LearningSer
 def get_interview_svc(cache: CacheRepository = Depends(get_cache)) -> InterviewService:
     """注入 InterviewService（依赖 Redis 缓存）"""
     return InterviewService(cache=cache)
+
+
+def get_interview_agent_svc(
+    cache: CacheRepository = Depends(get_cache),
+) -> InterviewAgentService:
+    """注入面试 Agent 服务——【每个请求新建】。
+
+    理由同 get_agent_svc：面试 Agent 跨多个 await 推进会话，若请求级数据落 self，
+    并发请求会在 await 让出时互相覆盖。LLM/RAG 仍是单例，新建的只是薄壳。
+    评价改为逐字流式后不再注入 InterviewService，这里只依赖 Redis。
+    """
+    return InterviewAgentService(cache=cache)
 
 
 def get_agent_svc(interview: InterviewService = Depends(get_interview_svc)) -> AgentService:
