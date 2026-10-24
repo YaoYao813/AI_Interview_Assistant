@@ -17,6 +17,20 @@
 - **学习路线**：按目标岗位生成分阶段学习计划。
 - **知识库管理**：上传、分页检索、格式筛选、删除、统计。
 
+## 界面
+
+![RAG 知识问答：流式回答 + 引用来源](docs/screenshots/rag-chat.png)
+
+*知识问答：SSE 流式输出，回答下方列出命中的知识库块与相似度（截图取流式生成中）*
+
+![动态追问面试：评分点评 + 下一步决策](docs/screenshots/interview-agent.png)
+
+*动态追问 Agent：先评价、再由模型决定追问还是翻页；状态栏显示阶段、题号与本阶段追问次数*
+
+![知识库管理：分页、搜索与格式筛选](docs/screenshots/knowledge-admin.png)
+
+*知识库管理：文档分页、文件名搜索、格式筛选与向量化状态*
+
 ## 架构
 
 ```
@@ -77,6 +91,13 @@ Redis（会话 / 缓存，TTL 30 min）
 ## 快速开始
 
 环境：Python 3.11+、Node 18+、Docker（只需 Redis）。
+
+一键启动（Redis + 后端 + 前端 + 自动打开浏览器）：
+
+- Windows：双击 `start.bat`，或在 cmd 里运行 `.\start.bat`
+- Git Bash / macOS / Linux：`bash start.sh`
+
+脚本会先检查 Docker、`backend/.env`、Python 依赖和端口占用，任何一步失败都会停下并给出处理命令。下面是手动分步启动。
 
 ```bash
 # 1. 启动 Redis（仓库根目录）
